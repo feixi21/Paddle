@@ -23,14 +23,13 @@ from .. import functional as F
 from .layers import Layer
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-
     from paddle import Tensor
     from paddle._typing import (
         DataLayout1D,
         DataLayout1DVariant,
         DataLayout2D,
         DataLayout3D,
+        IntSequence,
         ParamAttrLike,
         ShapeLike,
         Size2,
@@ -43,7 +42,7 @@ if TYPE_CHECKING:
         _PaddingTensorMode,
     )
 
-    _T_Padding = TypeVar("_T_Padding", Tensor, Sequence[int])
+    _T_Padding = TypeVar("_T_Padding", Tensor, IntSequence)
 
 __all__ = []
 
@@ -844,14 +843,14 @@ class Dropout(Layer):
     """
 
     p: float
-    axis: int | Sequence[int] | None
+    axis: int | IntSequence | None
     mode: _DropoutMode
     name: str | None
 
     def __init__(
         self,
         p: float = 0.5,
-        axis: int | Sequence[int] | None = None,
+        axis: int | IntSequence | None = None,
         mode: _DropoutMode = "upscale_in_train",
         name: str | None = None,
     ) -> None:
@@ -1217,7 +1216,7 @@ class Pad1D(Layer):
 
     def __init__(
         self,
-        padding: Tensor | Sequence[int] | int,
+        padding: Tensor | IntSequence | int,
         mode: _PaddingTensorMode = 'constant',
         value: float = 0.0,
         data_format: DataLayout1D = "NCL",
@@ -1285,7 +1284,7 @@ class ZeroPad1D(Layer):
 
     def __init__(
         self,
-        padding: Tensor | Sequence[int] | int,
+        padding: Tensor | IntSequence | int,
         data_format: DataLayout1D = "NCL",
         name: str | None = None,
     ) -> None:
@@ -1359,7 +1358,7 @@ class Pad2D(Layer):
 
     def __init__(
         self,
-        padding: Tensor | Sequence[int] | int,
+        padding: Tensor | IntSequence | int,
         mode: _PaddingTensorMode = 'constant',
         value: float = 0.0,
         data_format: DataLayout2D = "NCHW",
@@ -1430,7 +1429,7 @@ class ZeroPad2D(Layer):
 
     def __init__(
         self,
-        padding: Tensor | Sequence[int] | int,
+        padding: Tensor | IntSequence | int,
         data_format: DataLayout2D = "NCHW",
         name: str | None = None,
     ) -> None:
@@ -1504,7 +1503,7 @@ class Pad3D(Layer):
 
     def __init__(
         self,
-        padding: Tensor | Sequence[int] | int,
+        padding: Tensor | IntSequence | int,
         mode: _PaddingTensorMode = 'constant',
         value: float = 0.0,
         data_format: DataLayout3D = "NCDHW",
@@ -1575,7 +1574,7 @@ class ZeroPad3D(Layer):
 
     def __init__(
         self,
-        padding: Tensor | Sequence[int] | int,
+        padding: Tensor | IntSequence | int,
         data_format: DataLayout3D = "NCDHW",
         name: str | None = None,
     ) -> None:

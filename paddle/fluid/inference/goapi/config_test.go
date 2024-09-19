@@ -104,6 +104,9 @@ func TestMkldnn(t *testing.T) {
 
 	config.SetMKLDNNOp([]string{"fc", "conv"})
 
+	config.EnableMkldnnQuantizer()
+	t.Logf("MkldnnQuantizerEnabled:%+v", config.MkldnnQuantizerEnabled())
+
 	config.EnableMkldnnBfloat16()
 	t.Logf("MkldnnBfloat16Enabled:%+v", config.MkldnnBfloat16Enabled())
 

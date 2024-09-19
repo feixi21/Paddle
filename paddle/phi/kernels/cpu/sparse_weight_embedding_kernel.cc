@@ -101,7 +101,7 @@ void SparseWeightEmbeddingKernel(const Context& ctx,
     functor.template apply<int64_t>();
   } else {
     PADDLE_THROW(common::errors::Unimplemented(
-        "embedding input only support int32 and int64"));
+        "emebdding input only support int32 and int64"));
   }
 }
 

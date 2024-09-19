@@ -181,6 +181,7 @@ std::vector<ir::Var> GetOutputIters(const FusibleOp& op) {
     }
   };
   VLOG(4) << "GetOutputIters";
+  VLOG(4) << "Before AppendBound:" << _GetRootExpr(op);
   return AppendBound(std::visit(Visitor(), op), _GetRootExpr(op));
 }
 
@@ -721,7 +722,7 @@ std::vector<int64_t> GetLoopStrides(const ir::Expr& body,
   return loop_strides;
 }
 
-std::shared_ptr<FusionGroupInfo> GetFusionGroupInfo(
+FusionGroupInfo GetFusionGroupInfo(
     const std::vector<ir::Expr>& op_compute_bodies) {
   using trivial_fusion_detail::AppendBound;
   using trivial_fusion_detail::GetAllForIters;
@@ -733,8 +734,7 @@ std::shared_ptr<FusionGroupInfo> GetFusionGroupInfo(
   using trivial_fusion_detail::ExprSetFinderUtils::
       ScheduleBlockRealizeIsSplitTransform;
 
-  std::shared_ptr<FusionGroupInfo> group_info =
-      std::make_shared<FusionGroupInfo>();
+  FusionGroupInfo group_info = FusionGroupInfo();
 
   const auto GetSplitTransformBlock = [](const ir::Expr& expr_body) {
     return (ChildScheduleBlockRealizes *
@@ -745,17 +745,17 @@ std::shared_ptr<FusionGroupInfo> GetFusionGroupInfo(
     std::vector<ir::Expr> split_transform_block = GetSplitTransformBlock(body);
     if (!split_transform_block.empty()) {
       CHECK_EQ(split_transform_block.size(), 1);
-      group_info->loop_strides = GetLoopStrides(body, split_transform_block[0]);
+      group_info.loop_strides = GetLoopStrides(body, split_transform_block[0]);
     }
 
     if (IsReduceBody(body)) {
       ReduceOp op = ReduceOp(body);
-      if (group_info->reduce_var_name.empty()) {
+      if (group_info.reduce_var_name.empty()) {
         std::vector<ir::Var> all_iters =
             AppendBound(GetAllForIters(body), body);
         std::transform(all_iters.begin(),
                        all_iters.end(),
-                       std::back_inserter(group_info->loop_ranges),
+                       std::back_inserter(group_info.loop_ranges),
                        [](const ir::Var var) {
                          VLOG(4) << "Var is : : " << var;
                          VLOG(4) << "Var->upper_bound: " << var->upper_bound;
@@ -770,20 +770,20 @@ std::shared_ptr<FusionGroupInfo> GetFusionGroupInfo(
         for (int64_t i = all_iters.size() - reduce_iters.size();
              i < all_iters.size();
              i++) {
-          group_info->reduce_axis.emplace_back(i);
+          group_info.reduce_axis.emplace_back(i);
         }
       }
-      group_info->reduce_var_name.emplace_back(GetOutputTensor(op)->name);
+      group_info.reduce_var_name.emplace_back(GetOutputTensor(op)->name);
     }
   }
 
-  if (group_info->reduce_var_name.empty()) {
+  if (group_info.reduce_var_name.empty()) {
     trivial_fusion_detail::TrivialOp op =
         trivial_fusion_detail::TrivialOp(*(op_compute_bodies.begin()));
     std::vector<ir::Var> iters = GetOutputIters(op);
     std::transform(iters.begin(),
                    iters.end(),
-                   std::back_inserter(group_info->loop_ranges),
+                   std::back_inserter(group_info.loop_ranges),
                    [](const ir::Var var) {
                      if (var->upper_bound.is_constant()) {
                        return var->upper_bound.as_int64();
@@ -792,7 +792,7 @@ std::shared_ptr<FusionGroupInfo> GetFusionGroupInfo(
                      }
                    });
   }
-  VLOG(4) << group_info->DebugPrint();
+  VLOG(4) << group_info.DebugPrint();
   return group_info;
 }
 

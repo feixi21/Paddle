@@ -66,7 +66,7 @@ class NearestInterpolateOpConverter : public OpConverter {
       scale_w = scale;
     } else {
       // axis are different in static/dynamic mode
-      bool with_dynamic = true;
+      bool with_dynamic = engine_->with_dynamic_shape();
 
       if (!with_dynamic) {
         int h_axis = (data_layout == phi::DataLayout::kNCHW) + with_dynamic;
@@ -79,7 +79,9 @@ class NearestInterpolateOpConverter : public OpConverter {
       }
     }
 
-    scales.push_back(1.f);
+    if (engine_->with_dynamic_shape()) {
+      scales.push_back(1.f);
+    }
 
     if (data_layout == phi::DataLayout::kNCHW) {
       scales.push_back(1.f);

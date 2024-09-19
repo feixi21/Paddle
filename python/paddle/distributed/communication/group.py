@@ -12,18 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import annotations
-
 import warnings
-from typing import TYPE_CHECKING, Literal
 
 import paddle
 import paddle.distributed as dist
 from paddle import framework
-
-if TYPE_CHECKING:
-    from paddle import Tensor
-    from paddle.base.core import ProcessGroup
 
 
 class Group:
@@ -31,14 +24,7 @@ class Group:
     The abstract representation of group.
     """
 
-    def __init__(
-        self,
-        rank_in_group: int,
-        id: int,
-        ranks: list[int],
-        pg: ProcessGroup | None = None,
-        name: str | None = None,
-    ) -> None:
+    def __init__(self, rank_in_group, id, ranks, pg=None, name=None):
         self._rank_in_group = rank_in_group
         self._world_size = len(ranks) if rank_in_group >= 0 else -1
         self._id = id
@@ -47,51 +33,51 @@ class Group:
         self._name = name
 
     @property
-    def rank(self) -> int:
+    def rank(self):
         return self._rank_in_group
 
     @property
-    def ranks(self) -> list[int]:
+    def ranks(self):
         return self._ranks
 
     @property
-    def nranks(self) -> int:
+    def nranks(self):
         return len(self._ranks)
 
     @property
-    def name(self) -> str | None:
+    def name(self):
         return self._name
 
     @property
-    def process_group(self) -> ProcessGroup:
+    def process_group(self):
         return self._pg
 
     @property
-    def world_size(self) -> int:
+    def world_size(self):
         return self._world_size
 
     @property
-    def backend(self) -> str:
+    def backend(self):
         return self._pg.name()
 
     @property
-    def id(self) -> int:
+    def id(self):
         return self._id
 
-    def is_member(self) -> bool:
+    def is_member(self):
         if self.rank < 0:
             return False
         if self.nranks < 2:
             return False
         return True
 
-    def get_group_rank(self, rank: int) -> int | Literal[-1]:
+    def get_group_rank(self, rank):
         if self.is_member():
             return self.ranks.index(rank)
         else:
             return -1
 
-    def __repr__(self) -> str:
+    def __repr__(self):
         debug_str = (
             f"rank: {self.rank}, nranks: {self.nranks}, id: {self.id}, ranks: "
         )
@@ -140,7 +126,7 @@ def _get_or_throw_group_rank(global_rank, group):
     return group_rank
 
 
-def is_initialized() -> bool:
+def is_initialized():
     """
 
     Check whether the distributed environment has been initialized
@@ -168,7 +154,7 @@ def is_initialized() -> bool:
     return _GroupManager.global_group_id in _GroupManager.group_map_by_id
 
 
-def destroy_process_group(group: Group | None = None) -> None:
+def destroy_process_group(group=None):
     """
     Destroy a given group for communication
 
@@ -210,7 +196,7 @@ def destroy_process_group(group: Group | None = None) -> None:
         del _GroupManager.group_map_by_id[group.id]
 
 
-def get_group(id: int = 0) -> Group:
+def get_group(id=0):
     """
 
     Get group instance by group id.
@@ -269,9 +255,7 @@ def _sync_comm_stream(tensor, ring_id=0):
         )
 
 
-def wait(
-    tensor: Tensor, group: Group | None = None, use_calc_stream: bool = True
-) -> None:
+def wait(tensor, group=None, use_calc_stream=True):
     """
 
     wait to sync stream for group.
@@ -307,7 +291,7 @@ def wait(
         _sync_comm_stream(tensor, ring_id)
 
 
-def barrier(group: Group | None = None) -> None:
+def barrier(group=None):
     """
 
     Barrier among all participators in the group.
@@ -325,7 +309,7 @@ def barrier(group: Group | None = None) -> None:
             >>> import paddle
             >>> from paddle.distributed import init_parallel_env
 
-            >>> paddle.set_device(f'gpu:{paddle.distributed.ParallelEnv().dev_id}')
+            >>> paddle.set_device('gpu:%d'%paddle.distributed.ParallelEnv().dev_id)
             >>> init_parallel_env()
             >>> paddle.distributed.barrier()
     """
@@ -363,7 +347,7 @@ def barrier(group: Group | None = None) -> None:
         )
 
 
-def get_backend(group: Group | None = None) -> str:
+def get_backend(group=None):
     """
     Get the backend of given group.
 

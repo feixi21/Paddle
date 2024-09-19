@@ -11,13 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING
 
 import numpy as np
-from typing_extensions import TypeAlias
 
 import paddle
 from paddle import nn
@@ -25,24 +22,10 @@ from paddle.jit.dy2static.program_translator import unwrap_decorators
 
 from .static_flops import Table, static_flops
 
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    from paddle import Tensor
-    from paddle.nn import Layer
-    from paddle.static import Program
-
-    _CustomOpsAlias: TypeAlias = dict[type[Layer], Callable[..., None]]
-
 __all__ = []
 
 
-def flops(
-    net: Layer | Program,
-    input_size: list[int],
-    custom_ops: _CustomOpsAlias | None = None,
-    print_detail: bool = False,
-) -> int:
+def flops(net, input_size, custom_ops=None, print_detail=False):
     """Print a table about the FLOPs of network.
 
     Args:
@@ -102,7 +85,7 @@ def flops(
             ...                      [1, 1, 28, 28],
             ...                      custom_ops= {nn.LeakyReLU: count_leaky_relu},
             ...                      print_detail=True)
-            >>> # doctest: +SKIP('numpy print with different version')
+            >>> print(FLOPs)
             <class 'paddle.nn.layer.conv.Conv2D'>'s flops has been counted
             <class 'paddle.nn.layer.activation.ReLU'>'s flops has been counted
             Cannot find suitable count function for <class 'paddle.nn.layer.pooling.MaxPool2D'>. Treat it as zero FLOPs.
@@ -121,8 +104,6 @@ def flops(
             |   linear_2   |     [1, 84]     |     [1, 10]     |  850   |  840   |
             +--------------+-----------------+-----------------+--------+--------+
             Total Flops: 347560     Total Params: 61610
-            >>> # doctest: -SKIP
-            >>> print(FLOPs)
             347560
     """
     if isinstance(net, nn.Layer):
@@ -234,12 +215,7 @@ register_hooks = {
 }
 
 
-def dynamic_flops(
-    model: Layer,
-    inputs: Tensor,
-    custom_ops: _CustomOpsAlias | None = None,
-    print_detail: bool = False,
-) -> int:
+def dynamic_flops(model, inputs, custom_ops=None, print_detail=False):
     handler_collection = []
     types_collection = set()
     if custom_ops is None:

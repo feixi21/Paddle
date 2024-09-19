@@ -284,10 +284,8 @@ struct GPUContext::Impl {
   }
 
   void InitDnnWorkspace() {
-    PADDLE_ENFORCE_NOT_NULL(allocator_,
-                            common::errors::InvalidArgument(
-                                "The device allocator for GPU context is "
-                                "nullptr. It must not be null."));
+    PD_CHECK(allocator_ != nullptr,
+             "the device allocator for gpu context is nullptr.");
     workspace_ = new DnnWorkspaceHandle(allocator_, stream());
   }
 
@@ -304,10 +302,8 @@ struct GPUContext::Impl {
   //   return workspace_;
   // }
   DnnWorkspaceHandle GetDnnWorkspace() {
-    PADDLE_ENFORCE_NOT_NULL(allocator_,
-                            common::errors::InvalidArgument(
-                                "The device allocator for GPU context is "
-                                "nullptr. It must not be null."));
+    PD_CHECK(allocator_ != nullptr,
+             "the device allocator for gpu context is nullptr.");
     return DnnWorkspaceHandle(allocator_, stream());
   }
 
@@ -331,26 +327,18 @@ struct GPUContext::Impl {
 
   gpuStream_t stream() const {
     auto s = stream_->raw_stream();
-    PADDLE_ENFORCE_NOT_NULL(
-        s,
-        common::errors::InvalidArgument(
-            "The GPU stream is nullptr. It must not be null."));
+    PD_CHECK(s != nullptr, "the gpu stream is nullptr.");
     return s;
   }
 
   CUDAStream* cuda_stream() const {
-    PADDLE_ENFORCE_NOT_NULL(
-        stream_,
-        common::errors::InvalidArgument(
-            "The GPU stream is nullptr. It must not be null."));
+    PD_CHECK(stream_ != nullptr, "the gpu stream is nullptr.");
     return stream_;
   }
 
   void InitEigenDevice() {
-    PADDLE_ENFORCE_NOT_NULL(
-        allocator_,
-        common::errors::InvalidArgument(
-            "The allocator for eigen device is nullptr. It must not be null."));
+    PD_CHECK(allocator_ != nullptr,
+             "the allocator for eigen device is nullptr.");
     eigen_stream_ = std::make_unique<internal::EigenGpuStreamDevice>();
     eigen_stream_->Reinitialize(stream(), allocator_, place_);
     eigen_device_ = new Eigen::GpuDevice(eigen_stream_.get());
@@ -378,10 +366,7 @@ struct GPUContext::Impl {
           eigen_device_ = eigen_device_creator_();
       }
     });
-    PADDLE_ENFORCE_NOT_NULL(
-        eigen_device_,
-        common::errors::InvalidArgument(
-            "The GPU eigen_device is nullptr. It must not be null."));
+    PD_CHECK(eigen_device_ != nullptr, "the gpu eigen_device is nullptr.");
     return eigen_device_;
   }
 
@@ -420,10 +405,7 @@ struct GPUContext::Impl {
 #endif
 #endif
     });
-    PADDLE_ENFORCE_NOT_NULL(
-        blas_handle_,
-        common::errors::InvalidArgument(
-            "The GPU blas handle is nullptr. It must not be null."));
+    PD_CHECK(blas_handle_ != nullptr, "the gpu blas handle is nullptr.");
     return blas_handle_;
   }
 
@@ -464,10 +446,7 @@ struct GPUContext::Impl {
           blaslt_handle_ = blaslt_handle_creator_();
       }
     });
-    PADDLE_ENFORCE_NOT_NULL(
-        blaslt_handle_,
-        common::errors::InvalidArgument(
-            "The GPU blasLt handle is nullptr. It must not be null."));
+    PD_CHECK(blaslt_handle_ != nullptr, "the gpu blasLt handle is nullptr.");
     return blaslt_handle_;
   }
 
@@ -481,10 +460,7 @@ struct GPUContext::Impl {
         }
       }
     });
-    PADDLE_ENFORCE_NOT_NULL(
-        dnn_handle_,
-        common::errors::InvalidArgument(
-            "The GPU dnn handle is nullptr. It must not be null."));
+    PD_CHECK(dnn_handle_ != nullptr, "the gpu dnn handle is nullptr.");
     return dnn_handle_;
   }
 
@@ -518,10 +494,7 @@ struct GPUContext::Impl {
         }
       }
     });
-    PADDLE_ENFORCE_NOT_NULL(
-        solver_handle_,
-        common::errors::InvalidArgument(
-            "The GPU solver handle is nullptr. It must not be null."));
+    PD_CHECK(solver_handle_ != nullptr, "the gpu solver handle is nullptr.");
     return solver_handle_;
   }
 
@@ -541,10 +514,7 @@ struct GPUContext::Impl {
         }
       }
     });
-    PADDLE_ENFORCE_NOT_NULL(
-        sparse_handle_,
-        common::errors::InvalidArgument(
-            "The GPU sparse handle is nullptr. It must not be null."));
+    PD_CHECK(sparse_handle_ != nullptr, "the gpu sparse handle is nullptr.");
     return sparse_handle_;
   }
 

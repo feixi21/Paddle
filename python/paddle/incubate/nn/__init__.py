@@ -14,6 +14,7 @@
 
 from .layer.fused_dropout_add import FusedDropoutAdd
 from .layer.fused_dropout_nd import FusedDropout  # noqa: F401
+from .layer.fused_ec_moe import FusedEcMoe
 from .layer.fused_linear import FusedLinear
 from .layer.fused_transformer import (
     FusedBiasDropoutResidualLayerNorm,
@@ -30,5 +31,6 @@ __all__ = [
     'FusedMultiTransformer',
     'FusedLinear',
     'FusedBiasDropoutResidualLayerNorm',
+    'FusedEcMoe',
     'FusedDropoutAdd',
 ]

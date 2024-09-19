@@ -760,7 +760,6 @@ void BindIrMapping(py::module *m) {
   ir_mapping.def(py::init<>())
       .def("look_up",
            [](IrMapping &self, Value from) { return self.Lookup(from); })
-      .def("has", [](IrMapping &self, Value from) { return self.Has(from); })
       .def("add",
            [](IrMapping &self, Value from, Value to) {
              self.Add<Value>(from, to);
@@ -801,7 +800,7 @@ void BindOperation(py::module *m) {
       .def("num_operands", &Operation::num_operands)
       .def("num_results", &Operation::num_results)
       .def("num_regions", &Operation::num_regions)
-      .def("id", &Operation::id)
+
       .def("operand", &Operation::operand)
       .def("result",
            [](Operation &self, uint32_t index) {
@@ -1077,7 +1076,7 @@ void BindOperation(py::module *m) {
             if (int_attr) {
               return py::cast(int_attr.data());
             } else {
-              return py::cast(-1);
+              return py::cast<py::none>(Py_None);
             }
           },
           [](Operation &self, const int &op_role) {
@@ -1323,6 +1322,7 @@ void BindValue(py::module *m) {
           "get_defining_op",
           [](Value self) -> pir::Operation * { return self.defining_op(); },
           return_value_policy::reference)
+      .def("numel", [](Value self) { return phi::product(GetValueDims(self)); })
       .def("type", &Value::type)
       .def("index",
            [](Value self) -> uint32_t {

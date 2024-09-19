@@ -23,14 +23,8 @@ class CAllGatherOp : public framework::OperatorWithKernel {
  public:
   using framework::OperatorWithKernel::OperatorWithKernel;
   void InferShape(framework::InferShapeContext *ctx) const override {
-    PADDLE_ENFORCE_EQ(ctx->HasInput("X"),
-                      true,
-                      common::errors::PreconditionNotMet(
-                          "Input 'X' of AllGather must be provided."));
-    PADDLE_ENFORCE_EQ(ctx->HasOutput("Out"),
-                      true,
-                      common::errors::PreconditionNotMet(
-                          "Output 'Out' of AllGather must be provided."));
+    OP_INOUT_CHECK(ctx->HasInput("X"), "Input", "X", "AllGather");
+    OP_INOUT_CHECK(ctx->HasOutput("Out"), "Input", "Out", "AllGather");
     int nranks = ctx->Attrs().Get<int>("nranks");
     PADDLE_ENFORCE_GE(
         nranks,

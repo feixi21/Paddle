@@ -18,8 +18,6 @@ import gc
 import traceback
 from typing import TYPE_CHECKING, List, Tuple
 
-from paddle.base.dygraph.base import sot_simulation_mode_guard
-
 from ...profiler import EventGuard, event_register
 from ...psdb import NO_FALLBACK_CODES
 from ...utils import (
@@ -44,7 +42,7 @@ GuardedFunctions = List[GuardedFunction]
 
 dummy_guard: Guard = lambda frame: True
 dummy_guard.expr = "lambda frame: True"
-dummy_guard.inlined_expr = "lambda frame: True"
+dummy_guard.lambda_expr = "lambda frame: True"
 
 
 class OpcodeExecutorCache(metaclass=Singleton):
@@ -60,16 +58,14 @@ class OpcodeExecutorCache(metaclass=Singleton):
     MAX_CACHE_SIZE = 20
     cache: dict[types.CodeType, GuardedFunctions]
     translate_count: int
-    code_symbolic_inputs: dict[types.CodeType, dict[str, None | dict[int, int]]]
+    code_symbolic_inputs: dict[types.CodeType, dict[str, dict[int, int]]]
 
     def __init__(self):
         self.cache = {}
         self.translate_count = 0
         self.code_symbolic_inputs = {}
 
-    def get_symbolic_inputs(
-        self, code: types.CodeType
-    ) -> dict[str, dict[int, int] | None]:
+    def get_symbolic_inputs(self, code: types.CodeType):
         self.code_symbolic_inputs.setdefault(code, {})
         return self.code_symbolic_inputs[code]
 
@@ -86,7 +82,6 @@ class OpcodeExecutorCache(metaclass=Singleton):
         if code not in self.cache:
             log(2, f"[Cache]: Firstly call {code}\n")
             new_custom_code, guard_fn = self.translate(frame, **kwargs)
-            assert guard_fn is not None
             self.cache[code] = [(new_custom_code, guard_fn)]
             return new_custom_code
         guarded_fns = self.cache[code]
@@ -104,7 +99,7 @@ class OpcodeExecutorCache(metaclass=Singleton):
             guarded_fns (GuardedFunctions): The list of guarded functions associated with the code object.
 
         Returns:
-            CustomCode: The custom code object if a matching guard function is found, otherwise None.
+            CustomCode | None: The custom code object if a matching guard function is found, otherwise None.
         """
 
         if len(guarded_fns) >= self.MAX_CACHE_SIZE:
@@ -136,17 +131,11 @@ class OpcodeExecutorCache(metaclass=Singleton):
                     )
             except Exception as e:
                 log(2, f"[Cache]: Guard function error: {e}\n")
-                log(
-                    2,
-                    f"[Cache]: Guard string is: {getattr(guard_fn, 'expr', 'None')}\n",
-                )
-
                 continue
 
         log(2, "[Cache]: all guards missed\n")
         new_custom_code, guard_fn = self.translate(frame, **kwargs)
-        if guard_fn is not None:
-            guarded_fns.append((new_custom_code, guard_fn))
+        guarded_fns.append((new_custom_code, guard_fn))
         return new_custom_code
 
     def before_translate_hook(self, frame: types.FrameType):
@@ -155,7 +144,7 @@ class OpcodeExecutorCache(metaclass=Singleton):
 
     def translate(
         self, frame: types.FrameType, **kwargs
-    ) -> tuple[CustomCode, Guard | None]:
+    ) -> tuple[CustomCode, Guard]:
         """
         Translates the given frame's code object and returns the cache getter function and a guarded function for the translated code object.
 
@@ -182,7 +171,7 @@ class OpcodeExecutorCache(metaclass=Singleton):
 
     def analyse_guard_error(self, guard_fn, frame):
         def inner():
-            guard_expr = guard_fn.inlined_expr
+            guard_expr = guard_fn.lambda_expr
             lambda_head = "lambda frame: "
             guard_expr = guard_expr.replace(lambda_head, "")
             guards = guard_expr.split(" and ")
@@ -206,7 +195,7 @@ class OpcodeExecutorCache(metaclass=Singleton):
 def start_translate(
     frame: types.FrameType,
     **kwargs,
-) -> tuple[CustomCode, Guard | None]:
+) -> GuardedFunction:
     """
     Starts the translation process for the given frame and returns the translated code object and its guard function, or None if translation fails.
 
@@ -214,19 +203,14 @@ def start_translate(
         frame: The frame to be translated.
 
     Returns:
-        tuple[CustomCode, Guard | None]: The translated code object and its guard function, or None if translation fails.
+        GuardedFunction | None: The translated code object and its guard function, or None if translation fails.
     """
     simulator = OpcodeExecutor(frame, **kwargs)
     try:
         simulator.check_code_simulatable()
-        with sot_simulation_mode_guard(True):
-            new_custom_code, guard_fn = simulator.transform()
-        if not simulator._graph.need_cache:
-            return (
-                CustomCode(None, True),
-                None,
-            )
+        new_custom_code, guard_fn = simulator.transform()
         return new_custom_code, guard_fn
+    # TODO(zrr1999): InnerError maybe place before (FallbackError, BreakGraphError)
     # TODO(0x45f): handle BreakGraphError to trigger fallback
     except BreakGraphError as e:
         raise RuntimeError(

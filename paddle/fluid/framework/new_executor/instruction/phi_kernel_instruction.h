@@ -64,8 +64,6 @@ class PhiKernelInstruction : public InstructionBase {
 
   std::string phi_op_name_;
 
-  std::string kernel_name_;
-
   ::pir::Operation* op_{nullptr};  // not owned
 
   const ValueExecutionInfo* value_exec_info_;  // not owned

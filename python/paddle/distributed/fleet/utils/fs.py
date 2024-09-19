@@ -543,7 +543,7 @@ class HDFSClient(FS):
         return ret, output.splitlines()
 
     def _run_safe_cmd(self, cmd, redirect_stderr=False, retry_times=5):
-        exe_cmd = [self._base_cmd, *cmd.split()]
+        exe_cmd = [self._base_cmd] + cmd.split()
         ret = 0
         output = ""
         retry_sleep_second = 3
@@ -1282,14 +1282,12 @@ class HDFSClient(FS):
 class AFSClient(FS):
     """
     A tool of AFS. Use AfsWrapper.
-    When WITH_PSLIB=ON, you can use this class directly.
-    When WITH_PSCORE=ON, you should export LD_LIBRARY_PATH='YOUR_AFSAPISO_PATH' before using this class.
 
     Examples:
 
         .. code-block:: python
 
-            >>> # doctest: +SKIP('depend on external file')
+            >>> # doctest: +SKIP('depend on WITH_PSLIB')
             >>> from paddle.distributed.fleet.utils.fs import AFSClient
 
             >>> client = AFSClient()
@@ -1319,7 +1317,7 @@ class AFSClient(FS):
 
             .. code-block:: python
 
-                >>> # doctest: +SKIP('depend on external file')
+                >>> # doctest: +SKIP('depend on WITH_PSLIB')
                 >>> from paddle.distributed.fleet.utils.fs import AFSClient
 
                 >>> client = AFSClient()
@@ -1348,7 +1346,7 @@ class AFSClient(FS):
 
             .. code-block:: python
 
-                >>> # doctest: +SKIP('depend on external file')
+                >>> # doctest: +SKIP('depend on WITH_PSLIB')
                 >>> from paddle.distributed.fleet.utils.fs import AFSClient
 
                 >>> client = AFSClient()
@@ -1380,7 +1378,7 @@ class AFSClient(FS):
 
             .. code-block:: python
 
-                >>> # doctest: +SKIP('depend on external file')
+                >>> # doctest: +SKIP('depend on WITH_PSLIB')
                 >>> from paddle.distributed.fleet.utils.fs import AFSClient
 
                 >>> client = AFSClient()
@@ -1414,7 +1412,7 @@ class AFSClient(FS):
 
             .. code-block:: python
 
-                >>> # doctest: +SKIP('depend on external file')
+                >>> # doctest: +SKIP('depend on WITH_PSLIB')
                 >>> from paddle.distributed.fleet.utils.fs import AFSClient
 
                 >>> client = AFSClient()
@@ -1442,7 +1440,7 @@ class AFSClient(FS):
 
             .. code-block:: python
 
-                >>> # doctest: +SKIP('depend on external file')
+                >>> # doctest: +SKIP('depend on WITH_PSLIB')
                 >>> from paddle.distributed.fleet.utils.fs import AFSClient
 
                 >>> client = AFSClient()
@@ -1486,7 +1484,7 @@ class AFSClient(FS):
 
             .. code-block:: python
 
-                >>> # doctest: +SKIP('depend on external file')
+                >>> # doctest: +SKIP('depend on WITH_PSLIB')
                 >>> from paddle.distributed.fleet.utils.fs import AFSClient
 
                 >>> client = AFSClient()
@@ -1515,7 +1513,7 @@ class AFSClient(FS):
 
             .. code-block:: python
 
-                >>> # doctest: +SKIP('depend on external file')
+                >>> # doctest: +SKIP('depend on WITH_PSLIB')
                 >>> from paddle.distributed.fleet.utils.fs import AFSClient
 
                 >>> client = AFSClient()
@@ -1566,7 +1564,7 @@ class AFSClient(FS):
 
             .. code-block:: python
 
-                >>> # doctest: +SKIP('depend on external file')
+                >>> # doctest: +SKIP('depend on WITH_PSLIB')
                 >>> from paddle.distributed.fleet.utils.fs import AFSClient
 
                 >>> client = AFSClient()
@@ -1592,7 +1590,7 @@ class AFSClient(FS):
 
             .. code-block:: python
 
-                >>> # doctest: +SKIP('depend on external file')
+                >>> # doctest: +SKIP('depend on WITH_PSLIB')
                 >>> from paddle.distributed.fleet.utils.fs import AFSClient
 
                 >>> client = AFSClient()
@@ -1624,7 +1622,7 @@ class AFSClient(FS):
             .. code-block:: python
 
 
-                >>> # doctest: +SKIP('depend on external file')
+                >>> # doctest: +SKIP('depend on WITH_PSLIB')
                 >>> from paddle.distributed.fleet.utils.fs import AFSClient
 
                 >>> client = AFSClient()
@@ -1649,7 +1647,7 @@ class AFSClient(FS):
 
             .. code-block:: python
 
-                >>> # doctest: +SKIP('depend on external file')
+                >>> # doctest: +SKIP('depend on WITH_PSLIB')
                 >>> from paddle.distributed.fleet.utils.fs import AFSClient
 
                 >>> client = AFSClient()
@@ -1681,7 +1679,7 @@ class AFSClient(FS):
 
             .. code-block:: python
 
-                >>> # doctest: +SKIP('depend on external file')
+                >>> # doctest: +SKIP('depend on WITH_PSLIB')
                 >>> from paddle.distributed.fleet.utils.fs import AFSClient
 
                 >>> client = AFSClient()

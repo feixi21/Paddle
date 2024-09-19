@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include "paddle/fluid/inference/tensorrt/plugin/custom_generic_plugin.h"
-#include "paddle/common/enforce.h"
 #include "paddle/fluid/framework/framework.pb.h"
 #include "paddle/fluid/framework/op_kernel_type.h"
 #include "paddle/fluid/framework/phi_utils.h"
@@ -393,13 +392,7 @@ nvinfer1::DimsExprs CustomGenericPlugin::getOutputDimensions(
     const nvinfer1::DimsExprs* inputs,
     int nb_inputs,
     nvinfer1::IExprBuilder& expr_builder) TRT_NOEXCEPT {
-  PADDLE_ENFORCE_LT(
-      output_index,
-      getNbOutputs(),
-      common::errors::InvalidArgument(
-          "Output index (%d) must be less than the number of outputs (%d).",
-          output_index,
-          getNbOutputs()));
+  CHECK(output_index < getNbOutputs());
   auto& op_meta_info_map = OpMetaInfoMap::Instance();
   const auto& meta_info_map = op_meta_info_map.GetMap();
   auto& op_info = meta_info_map.at(op_desc_.Type()).front();
@@ -460,21 +453,8 @@ void CustomGenericPlugin::configurePlugin(
     int nb_inputs,
     const nvinfer1::DynamicPluginTensorDesc* out,
     int nb_outputs) TRT_NOEXCEPT {
-  PADDLE_ENFORCE_EQ(nb_inputs,
-                    getNbInputs(),
-                    common::errors::InvalidArgument(
-                        "Number of inputs (%d) does not match the "
-                        "expected number of inputs (%d).",
-                        nb_inputs,
-                        getNbInputs()));
-
-  PADDLE_ENFORCE_EQ(nb_outputs,
-                    getNbOutputs(),
-                    common::errors::InvalidArgument(
-                        "Number of outputs (%d) does not match the "
-                        "expected number of outputs (%d).",
-                        nb_outputs,
-                        getNbOutputs()));
+  CHECK(nb_inputs == getNbInputs());
+  CHECK(nb_outputs == getNbOutputs());
 }
 
 // Shutdown the layer. This is called when the engine is destroyed
@@ -511,21 +491,13 @@ int CustomGenericPlugin::enqueue(const nvinfer1::PluginTensorDesc* input_desc,
     } else if (proto_type == GenerateCustomGenericPluginDataType::PLUGIN_BOOL) {
       return {phi::DataType::BOOL, sizeof(bool)};
     } else {
-      PADDLE_ENFORCE_EQ(
-          false,
-          true,
-          common::errors::InvalidArgument("Precision is not supported."));
+      CHECK(false) << "precision is not supported";
     }
   };
 
   nvinfer1::DataType data_type = input_desc[0].type;
-  PADDLE_ENFORCE_EQ(
-      (data_type == nvinfer1::DataType::kFLOAT) ||
-          (data_type == nvinfer1::DataType::kHALF),
-      true,
-      common::errors::InvalidArgument("The data type must be either kFLOAT or "
-                                      "kHALF, but received data type %d.",
-                                      static_cast<int>(data_type)));
+  CHECK((data_type == nvinfer1::DataType::kFLOAT) ||
+        (data_type == nvinfer1::DataType::kHALF));
 
   paddle::CustomOpKernelContext kernel_ctx;
   // input

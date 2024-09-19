@@ -37,7 +37,6 @@ from paddle.base.framework import (
 )
 from paddle.base.layer_helper import LayerHelper
 from paddle.base.param_attr import ParamAttr
-from paddle.framework import in_pir_mode
 
 if TYPE_CHECKING:
     from paddle import Tensor
@@ -529,7 +528,7 @@ def shuffle_batch(x: Tensor, seed: int | Tensor | None = None) -> Tensor:
     op_attrs = {}
     if isinstance(seed, int):
         op_attrs["startup_seed"] = seed
-        if in_pir_mode():
+        if paddle.framework.in_pir_mode():
             seed = paddle.full([0], 0, "int64")
             out, _, _ = _C_ops.shuffle_batch(x, seed, op_attrs["startup_seed"])
             return out
@@ -539,7 +538,7 @@ def shuffle_batch(x: Tensor, seed: int | Tensor | None = None) -> Tensor:
                 dtype="int64",
                 persistable=False,
             )
-    if in_pir_mode():
+    if paddle.framework.in_pir_mode():
         out, _, _ = _C_ops.shuffle_batch(x, seed, 0)
         return out
     helper.append_op(
@@ -771,9 +770,6 @@ def tdm_child(
     )
     tree_info.stop_gradient = True
 
-    if in_pir_mode():
-        return _C_ops.tdm_child(x, tree_info, child_nums, c_dtype)
-
     child = helper.create_variable_for_type_inference(dtype=dtype)
     leaf_mask = helper.create_variable_for_type_inference(dtype=dtype)
 
@@ -985,18 +981,6 @@ def tdm_sampler(
         dtype=tree_dtype,
         default_initializer=paddle.nn.initializer.Constant(0),
     )
-
-    if in_dynamic_or_pir_mode():
-        return _C_ops.tdm_sampler(
-            x,
-            travel,
-            layer,
-            output_positive,
-            neg_samples_num_list,
-            tree_layer_offset_lod,
-            seed,
-            c_dtype,
-        )
 
     out = helper.create_variable_for_type_inference(dtype=dtype)
     out.stop_gradient = True

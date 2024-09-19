@@ -40,9 +40,6 @@ paddle::dialect::IfOp, paddle::dialect::WhileOp, paddle::dialect::HasElementsOp,
 using pir::TuplePopOp;
 using pir::TuplePushOp;
 constexpr char kStopGradientAttrName[] = "stop_gradient";  // NOLINT
-
-COMMON_DECLARE_bool(pir_debug);
-
 namespace paddle::dialect {
 
 void IfOp::Build(pir::Builder &builder,             // NOLINT
@@ -170,11 +167,6 @@ void IfOp::Print(pir::IrPrinter &printer) {
   auto op = operation();
   printer.PrintOpResult(op);
   os << " = \"" << name() << "\"";
-
-  if (VLOG_IS_ON(1) || FLAGS_pir_debug) {
-    os << " [id:" << op->id() << "]";
-  }
-
   printer.PrintOpOperands(op);
   printer.PrintAttributeMap(op);
   os << " -> ";
@@ -427,11 +419,7 @@ void WhileOp::Print(pir::IrPrinter &printer) {
   auto &os = printer.os;
   auto op = operation();
   printer.PrintOpResult(op);
-  os << " = \"" << name() << "\"";
-  if (VLOG_IS_ON(1) || FLAGS_pir_debug) {
-    os << " [id:" << op->id() << "]";
-  }
-  os << " (cond=";
+  os << " = \"" << name() << "\" (cond=";
   printer.PrintValue(cond());
   os << ", inputs=";
   auto operands = (*this)->operands_source();
@@ -720,6 +708,8 @@ void AddCstrForArgs(const pir::Value &origin_input,
   block_arg_shape_or_data.Match(
       [&](const symbol::TensorShapeOrDataDimExprs &impl) {
         const auto &block_arg_shape = impl.shape();
+        const auto &origin_input_shape =
+            infer_context->GetShapeOrDataForValue(origin_input).shape();
         const auto &yield_value_shape =
             infer_context->GetShapeOrDataForValue(yield_value).shape();
         PADDLE_ENFORCE_EQ(block_arg_shape.size(),
@@ -734,16 +724,14 @@ void AddCstrForArgs(const pir::Value &origin_input,
                               yield_value_shape.size()));
         const auto &original_input_shape =
             infer_context->GetShapeOrDataForValue(origin_input).shape();
-        if (original_input_shape.size() != block_arg_shape.size()) {
-          return;
-        }
         // GTOne
-        for (size_t j = 0; j < original_input_shape.size(); ++j) {
-          if (infer_context->IsGreatThanOne(original_input_shape[j])) {
-            infer_context->AddGreatThanOneCstr(block_arg_shape[j]);
+        if (origin_input_shape.size() == block_arg_shape.size()) {
+          for (size_t j = 0; j < origin_input_shape.size(); ++j) {
+            if (infer_context->IsGreatThanOne(origin_input_shape[j])) {
+              infer_context->AddGreatThanOneCstr(block_arg_shape[j]);
+            }
           }
         }
-
         // Equal
         for (size_t j = 0; j < block_arg_shape.size(); ++j) {
           if (block_arg_shape[j].isa<int64_t>()) {

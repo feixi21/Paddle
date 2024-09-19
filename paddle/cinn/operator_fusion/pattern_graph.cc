@@ -75,7 +75,7 @@ std::vector<PatternNodePtr> PatternGraph::ReturnFusionResults() {
   return sorted_nodes;
 }
 
-std::vector<PatternNodePtr> PatternGraph::SortByTopoOrder() const {
+std::vector<PatternNodePtr> PatternGraph::SortByTopoOrder() {
   // sort all_pattern_nodes_ by topo order.
   std::vector<PatternNodePtr> res;
   std::list<PatternNodePtr> topo_queue;
@@ -100,7 +100,7 @@ std::vector<PatternNodePtr> PatternGraph::SortByTopoOrder() const {
   return res;
 }
 
-std::vector<PatternNodePtr> PatternGraph::SortByReverseTopoOrder() const {
+std::vector<PatternNodePtr> PatternGraph::SortByReverseTopoOrder() {
   // sort all_pattern_nodes_ by reverse topo order.
   std::vector<PatternNodePtr> res;
   std::list<PatternNodePtr> reverse_topo_queue;
@@ -215,11 +215,7 @@ PatternGraph::PatternGraph(const std::vector<PatternContent>& contents,
   }
 
   for (const auto& content : contents) {
-    const auto& axes =
-        policy_manager_.template GetPolicy<RelativeJudgePolicy>()
-            ->GetAxesInfoManager()
-            .GetModifiedSignature(content.op);
-    PatternNodePtr node = std::make_shared<PatternNode>(content, axes);
+    PatternNodePtr node = std::make_shared<PatternNode>(content);
     op_to_node_map[content.op] = node;
     all_pattern_nodes_.emplace(node);
   }
@@ -283,13 +279,10 @@ void PatternGraph::AppendNode(const PatternNodePtr& node) {
 std::string PatternGraph::GraphInfo() const {
   std::stringstream ss;
   ss << "\n========= GraphInfo ===========";
-  for (const auto& v : SortByTopoOrder()) {
-    ss << "\n##############################";
+  for (const auto& v : all_pattern_nodes_) {
     ss << "\n" << v->DebugStr();
     ss << "    IsOutput: " << IsOutputNodeMatcher()(*this, v);
-    ss << "\n    Loop Framework is: "
-       << GetLoopFramework(v->stmt_pattern()).loop;
-    ss << std::endl;
+    ss << "\n    Loop Framework is: " << GetLoopFramework(v->stmt_pattern());
   }
   ss << "\n===============================";
   return ss.str();

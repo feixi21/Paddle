@@ -11,13 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from __future__ import annotations
 
 import sys
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
 
 __all__ = []
 
@@ -235,10 +230,7 @@ class DataGenerator:
 # add more generalized DataGenerator that can adapt user-defined slot
 # for example, [(name, float_list), (name, str_list), (name, int_list)]
 class MultiSlotStringDataGenerator(DataGenerator):
-    def _gen_str(
-        self,
-        line: Sequence[tuple[str, list[str]]],
-    ) -> str:
+    def _gen_str(self, line):
         '''
         Further processing the output of the process() function rewritten by
         user, outputting data that can be directly read by the MultiSlotDataFeed,
@@ -283,10 +275,7 @@ class MultiSlotStringDataGenerator(DataGenerator):
 
 
 class MultiSlotDataGenerator(DataGenerator):
-    def _gen_str(
-        self,
-        line: Sequence[tuple[str, list[float]]],
-    ) -> str:
+    def _gen_str(self, line):
         '''
         Further processing the output of the process() function rewritten by
         user, outputting data that can be directly read by the MultiSlotDataFeed,

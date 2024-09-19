@@ -12,56 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import annotations
-
 import sys
-from typing import TYPE_CHECKING, Any, TypedDict
 
 from . import core, framework
 from .framework import cpu_places, cuda_places, xpu_places
-
-if TYPE_CHECKING:
-    from paddle.base.core import Graph, _Scope
-    from paddle.optimizer import Optimizer
-    from paddle.static import Program
-
-    class _CustomOp(TypedDict):
-        paddle_op: str
-        popart_op: str
-        domain: str
-        version: int
-
-    class _IpuStrategyOptions(TypedDict, total=False):
-        is_training: bool
-        need_avg_shard: bool
-        enable_fp16: bool
-        use_no_bias_optimizer: bool
-        enable_distribution: bool
-        scaled_optimizer_state: bool
-        is_dynamic: bool
-        enable_model_runtime_executor: bool
-        num_ipus: int
-        batches_per_step: int
-        micro_batch_size: int
-        random_seed: int
-        tiles_per_ipu: int
-        num_buffers: int
-        available_memory_proportion: float
-        loss_scaling: float
-        max_weight_norm: float
-        timeout_ms: float
-        lr: float
-        accl1_type: str
-        accl2_type: str
-        accl3_type: str
-        onnx_dump_path: str
-        weight_decay_mode: str
-        enable_pipelining: bool
-        enable_gradient_accumulation: bool
-        accumulation_factor: int
-        enable_manual_shard: bool
-        custom_op: _CustomOp
-
 
 __all__ = []
 
@@ -170,11 +124,7 @@ class CompiledProgram:
             ...                     fetch_list=[loss.name])
     """
 
-    def __init__(
-        self,
-        program_or_graph: Graph | Program,
-        build_strategy: BuildStrategy | None = None,
-    ) -> None:
+    def __init__(self, program_or_graph, build_strategy=None):
         if isinstance(program_or_graph, core.Graph):
             self._graph = program_or_graph
             # don't not create a new program here.
@@ -604,11 +554,7 @@ class IpuStrategy:
             >>> ipu_strategy = static.IpuStrategy()
     """
 
-    has_custom_ops: bool
-    custom_op_names: list[str]
-    need_compile: bool
-
-    def __init__(self) -> None:
+    def __init__(self):
         if core.is_compiled_with_ipu():
             self._ipu_strategy = core.IpuStrategy()
             default_options = {
@@ -632,7 +578,7 @@ class IpuStrategy:
         if in_dynamic_mode():
             self.register_patch()
 
-    def register_patch(self) -> None:
+    def register_patch(self):
         """
         Register patch function to support dynamic to static on IPU. This operation would break the dy2static functionality on CPU.
         Use `release_patch` to release the patch.
@@ -651,7 +597,7 @@ class IpuStrategy:
         """
         IpuDynamicPatcher.register_patch(self)
 
-    def release_patch(self) -> None:
+    def release_patch(self):
         """
         Release the registered IPU functions.
 
@@ -669,7 +615,7 @@ class IpuStrategy:
         """
         IpuDynamicPatcher.release_patch()
 
-    def set_optimizer(self, optimizer: Optimizer) -> None:
+    def set_optimizer(self, optimizer):
         """
         Set optimizer to ipu_strategy in dynamic mode.
 
@@ -701,7 +647,7 @@ class IpuStrategy:
         else:
             raise RuntimeError("Only needs to set optimizer in dynamic mode.")
 
-    def parse_optimizer(self, optimizer: Optimizer) -> _IpuStrategyOptions:
+    def parse_optimizer(self, optimizer):
         """
         Parse optimizer attributes for IPU dynamic to static support. Currently only support parse lr.
 
@@ -742,11 +688,11 @@ class IpuStrategy:
 
     def set_graph_config(
         self,
-        num_ipus: int = 1,
-        is_training: bool = True,
-        micro_batch_size: int = 1,
-        enable_manual_shard: bool = False,
-    ) -> None:
+        num_ipus=1,
+        is_training=True,
+        micro_batch_size=1,
+        enable_manual_shard=False,
+    ):
         """
         Set graph configuration to the IpuStrategy instance.
 
@@ -791,11 +737,11 @@ class IpuStrategy:
 
     def set_pipelining_config(
         self,
-        enable_pipelining: bool = False,
-        batches_per_step: int = 1,
-        enable_gradient_accumulation: bool = False,
-        accumulation_factor: int = 1,
-    ) -> None:
+        enable_pipelining=False,
+        batches_per_step=1,
+        enable_gradient_accumulation=False,
+        accumulation_factor=1,
+    ):
         """
         Set pipelining configuration to the IpuStrategy instance. Used to optimize the throughput performance.
 
@@ -841,7 +787,7 @@ class IpuStrategy:
         }
         self.set_options(options)
 
-    def set_precision_config(self, enable_fp16: bool = False) -> None:
+    def set_precision_config(self, enable_fp16=False):
         """
         Set half computation configuration to the IpuStrategy instance. Used to optimize the performance.
 
@@ -870,12 +816,8 @@ class IpuStrategy:
         self.set_options(options)
 
     def add_custom_op(
-        self,
-        paddle_op: str,
-        popart_op: str | None = None,
-        domain: str = 'custom.ops',
-        version: int = 1,
-    ) -> None:
+        self, paddle_op, popart_op=None, domain='custom.ops', version=1
+    ):
         """
         Add a mapping to use popart custom ops running on the IPU.
 
@@ -917,7 +859,7 @@ class IpuStrategy:
         if not self.has_custom_ops:
             self.has_custom_ops = True
 
-    def set_options(self, options: _IpuStrategyOptions) -> None:
+    def set_options(self, options):
         """
         Set options from dict.
 
@@ -939,7 +881,7 @@ class IpuStrategy:
 
                 >>> ipu_strategy = static.IpuStrategy()
                 >>> options = {'num_ipus':1, 'enable_fp16': True}
-                >>> ipu_strategy.set_options(options)  # type: ignore[arg-type]
+                >>> ipu_strategy.set_options(options)
         """
         self._ipu_strategy.set_options(options)
         # check whether to recompile program with updated ipu options.
@@ -947,7 +889,7 @@ class IpuStrategy:
         if options.keys() - recompile_white_list:
             self.need_compile = True
 
-    def get_option(self, option: str) -> Any:
+    def get_option(self, option):
         """
         Get option.
 
@@ -972,7 +914,7 @@ class IpuStrategy:
         """
         return self._ipu_strategy.get_option(option)['value']
 
-    def enable_pattern(self, pattern: str) -> None:
+    def enable_pattern(self, pattern):
         """
         Enable PopART pattern to optimize the graph.
 
@@ -997,7 +939,7 @@ class IpuStrategy:
         """
         self._ipu_strategy.enable_pattern(pattern)
 
-    def disable_pattern(self, pattern: str) -> None:
+    def disable_pattern(self, pattern):
         """
         Disable PopART pattern.
 
@@ -1023,28 +965,28 @@ class IpuStrategy:
         self._ipu_strategy.disable_pattern(pattern)
 
     @property
-    def num_ipus(self) -> int:
+    def num_ipus(self):
         """
         Get the number of IPU devices from IpuStrategy instance.
         """
         return self.get_option('num_ipus')
 
     @property
-    def is_training(self) -> bool:
+    def is_training(self):
         """
         Get the boolean of training or inference from IpuStrategy instance.
         """
         return self.get_option('is_training')
 
     @property
-    def enable_pipelining(self) -> bool:
+    def enable_pipelining(self):
         """
         Get the boolean of enable pipelining or not from IpuStrategy instance.
         """
         return self.get_option('enable_pipelining')
 
     @property
-    def enable_fp16(self) -> bool:
+    def enable_fp16(self):
         """
         Get the boolean of float16 mode or not from IpuStrategy instance.
         """
@@ -1094,12 +1036,7 @@ class IpuCompiledProgram:
             ...     ipu_strategy=ipu_strategy)
     """
 
-    def __init__(
-        self,
-        program: Program | None = None,
-        scope: _Scope | None = None,
-        ipu_strategy: IpuStrategy | None = None,
-    ) -> None:
+    def __init__(self, program=None, scope=None, ipu_strategy=None):
         if not core.is_compiled_with_ipu():
             raise ValueError(
                 "Can not use this function since PaddlePaddle is not compiled with IPU"
@@ -1136,7 +1073,7 @@ class IpuCompiledProgram:
 
         self._backend = core.IpuBackend.get_instance()
 
-    def compile(self, feed_list: list[str], fetch_list: list[str]) -> Program:
+    def compile(self, feed_list, fetch_list):
         """
         This interface is used to compile the input Program to a program
         to run the model on the ipu.

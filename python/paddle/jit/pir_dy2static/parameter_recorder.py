@@ -110,11 +110,7 @@ class InplaceMap:
         self.params_dict = checkpoint
 
     def save_checkpoint(self):
-        ckeckpoint = {}
-        for program_id, params in self.params_dict.items():
-            new_params = dict(params.items())
-            ckeckpoint[program_id] = new_params
-        return ckeckpoint
+        return dict(self.params_dict.items())
 
 
 _global_parameter_recorder = ParametersRecorder()

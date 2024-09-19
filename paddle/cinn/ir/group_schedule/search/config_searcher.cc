@@ -198,10 +198,10 @@ bool CandidateGenerator::IsValid(const CandidateType& candidate) const {
 }
 
 ScheduleConfigSearcher::ScheduleConfigSearcher(
-    std::vector<std::unique_ptr<BaseObjectiveFunc>> objective_funcs,
+    std::unique_ptr<BaseObjectiveFunc> objective_func,
     const std::vector<std::pair<int, int>>& candidate_range,
     const std::vector<ConstraintFunc>& contraints)
-    : objective_funcs_(std::move(objective_funcs)),
+    : objective_func_(std::move(objective_func)),
       candidate_range_(candidate_range),
       contraints_(contraints) {}
 
@@ -212,10 +212,7 @@ std::pair<ScoreType, CandidateType> ScheduleConfigSearcher::Search(
   std::vector<CandidateType> candidates = candidate_generator.Candidates();
   VLOG(6) << "Candidate num = " << candidates.size();
   for (const auto& candidate : candidates) {
-    ScoreType score = 0;
-    for (auto& objective_func_ : objective_funcs_) {
-      score += (*objective_func_)(candidate);
-    }
+    ScoreType score = (*objective_func_)(candidate);
     VLOG(6) << "Candidate: [" << utils::Join<int64_t>(candidate, ", ") << "]";
     VLOG(6) << "Score = " << score;
     records_[score] = candidate;

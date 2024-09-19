@@ -14,7 +14,6 @@
 
 #include "paddle/cinn/hlir/dialect/operator/transforms/pd_to_cinn_pass.h"
 
-#include <regex>
 #include "paddle/cinn/hlir/dialect/operator/ir/cinn_op.h"
 #include "paddle/cinn/hlir/dialect/operator/ir/manual_op.h"
 #include "paddle/cinn/hlir/dialect/operator/transforms/group_merge/op_with_group_merge_util.h"
@@ -28,8 +27,6 @@
 #include "paddle/pir/include/pass/pass.h"
 #include "paddle/pir/include/pass/pass_manager.h"
 #include "paddle/pir/include/pattern_rewrite/pattern_rewrite_driver.h"
-
-PD_DECLARE_string(deny_cinn_ops);
 
 namespace cinn {
 namespace dialect {
@@ -81,13 +78,16 @@ void ReplaceWithCinnReshapeOp(OpT op,
                               const std::vector<int> &out_shape) {
   PADDLE_ENFORCE_EQ(
       op->num_results(),
-      1U,
+      2U,
       ::common::errors::PreconditionNotMet(
-          "The size of source op outputs must be 1, but received %d.",
+          "The size of source op outputs must be 2, but received %d.",
           op->num_results()));
   auto cinn_reshape = rewriter.Build<cinn::dialect::ReshapeOp>(
       op->operand_source(0), out_shape);
+  auto generate_xshape =
+      rewriter.Build<cinn::dialect::GenerateXShapeOp>(op->operand_source(0));
   rewriter.ReplaceAllUsesWith(op.result(0), cinn_reshape.result(0));
+  rewriter.ReplaceAllUsesWith(op.result(1), generate_xshape.result(0));
 }
 
 }  // namespace
@@ -114,16 +114,8 @@ class SumOpPattern : public pir::OpRewritePattern<paddle::dialect::SumOp> {
                             .dyn_cast<paddle::dialect::DataTypeAttribute>()
                             .data();
 
-    auto in = op->operand_source(0);
-    auto in_data_type = in.type().dyn_cast<pir::DenseTensorType>().dtype();
-    if (in_data_type.isa<pir::Int32Type>() ||
-        in_data_type.isa<pir::BoolType>()) {
-      in = rewriter.Build<paddle::dialect::CastOp>(in, phi::DataType::INT64)
-               .result(0);
-    }
-    auto cinn_reduce =
-        rewriter.Build<cinn::dialect::ReduceSumOp>(in, axis, keepdim, dtype);
-
+    auto cinn_reduce = rewriter.Build<cinn::dialect::ReduceSumOp>(
+        op->operand_source(0), axis, keepdim, dtype);
     rewriter.ReplaceAllUsesWith(op.result(0), cinn_reduce.result(0));
     rewriter.EraseOp(op);
     if (axes_full_op->use_empty()) {
@@ -276,7 +268,15 @@ class ReshapeOpPattern
             out_shape_attr[i].dyn_cast<::pir::Int64Attribute>().data());
       }
     }
-    ReplaceWithCinnReshapeOp(op, rewriter, vec_out_shape);
+    PADDLE_ENFORCE_EQ(
+        op->num_results(),
+        1U,
+        ::common::errors::PreconditionNotMet(
+            "The size of source op outputs must be 1, but received %d.",
+            op->num_results()));
+    auto cinn_reshape = rewriter.Build<cinn::dialect::ReshapeOp>(
+        op->operand_source(0), vec_out_shape);
+    rewriter.ReplaceAllUsesWith(op.result(0), cinn_reshape.result(0));
     rewriter.EraseOp(op);
   }
 };
@@ -434,8 +434,7 @@ class ConcatOpPattern
   using pir::OpRewritePattern<paddle::dialect::ConcatOp>::OpRewritePattern;
 
   bool Match(paddle::dialect::ConcatOp op) const override {
-    std::regex pattern(R"((^|;)(concat)($|;))");
-    const bool is_denied = std::regex_search(FLAGS_deny_cinn_ops, pattern);
+    const bool is_denied = CompatibleInfo::IsDeniedForCinn(*op.operation());
     return !is_denied && PatternConstraint(op);
   }
 
@@ -549,7 +548,7 @@ class SplitOpPattern : public pir::OpRewritePattern<paddle::dialect::SplitOp> {
       } else {
         PADDLE_ENFORCE(
             false,
-            ::common::errors::InvalidArgument(
+            phi::errors::InvalidArgument(
                 "Currently only support pir::slice/split as downstream "
                 "op, but got: %s",
                 downstream_op->name()));
@@ -916,6 +915,7 @@ class SqueezeOpPattern
                   in_shape[i]));
         }
       }
+
       ReplaceWithCinnReshapeOp(op, rewriter, output_shape);
       rewriter.EraseOp(op);
 
@@ -938,36 +938,25 @@ class UnsqueezeOpPattern
                           .dyn_cast<pir::ShapedTypeInterface>()
                           .IsDynamicShape();
     if (IsDefinedBy<FullIntArrayOp>(op, 1) && !is_dyshape) {
+      const FullIntArrayOp axis_full_op = CastDefinedTo<FullIntArrayOp>(op, 1);
+      auto axis_vec = cinn::dialect::ir::GetVectorAttr(axis_full_op, "value");
+      std::set<int64_t> axis_set(axis_vec.begin(), axis_vec.end());
+
       auto in_shape =
           phi::vectorize(op.operand_source(0)
                              .type()
                              .dyn_cast<paddle::dialect::DenseTensorType>()
                              .dims());
 
-      const std::set<int64_t> axis_set = [&] {
-        const FullIntArrayOp axis_full_op =
-            CastDefinedTo<FullIntArrayOp>(op, 1);
-        auto axis_vec = cinn::dialect::ir::GetVectorAttr(axis_full_op, "value");
-        std::set<int64_t> axis_set;
-        for (int64_t axis : axis_vec) {
-          int64_t axis_val = axis < 0 ? axis += in_shape.size() + 1 : axis;
-          axis_set.insert(axis_val);
-        }
-        return axis_set;
-      }();
+      std::vector<int> output_shape;
 
-      const std::vector<int> output_shape = [&] {
-        const size_t output_rank = in_shape.size() + axis_set.size();
-        std::vector<int> output_shape;
-        for (size_t i = 0, input_index = 0; i < output_rank; ++i) {
-          if (axis_set.count(i)) {
-            output_shape.push_back(1);
-            continue;
-          }
-          output_shape.push_back(in_shape[input_index++]);
+      for (size_t i = 0; i < in_shape.size(); ++i) {
+        output_shape.push_back(in_shape[i]);
+        if (axis_set.count(i)) {
+          output_shape.push_back(1);
         }
-        return output_shape;
-      }();
+      }
+
       ReplaceWithCinnReshapeOp(op, rewriter, output_shape);
       rewriter.EraseOp(op);
 
@@ -1058,7 +1047,9 @@ class FlattenOpPattern
 
     auto reshape_op = rewriter.Build<paddle::dialect::ReshapeOp>(
         op->operand_source(0), new_shape);
+
     reshape_op.result(0).set_type(op.result(0).type());
+
     rewriter.ReplaceAllUsesWith(op.result(0), reshape_op.result(0));
 
     rewriter.EraseOp(op);

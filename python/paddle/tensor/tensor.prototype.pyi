@@ -24,8 +24,7 @@ from paddle._typing import *  # noqa: F403
 
 # isort: on
 
-from collections.abc import Iterator
-from typing import Any, Literal, overload
+from typing import Any, Iterator, Literal, overload
 
 import numpy.typing as npt
 

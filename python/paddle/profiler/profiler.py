@@ -19,7 +19,7 @@ import json
 import os
 import socket
 from enum import Enum
-from typing import TYPE_CHECKING, Callable, Literal
+from typing import TYPE_CHECKING, Any, Callable
 from warnings import warn
 
 import paddle
@@ -45,11 +45,6 @@ from .utils import RecordEvent, wrap_optimizers
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
-    from types import TracebackType
-
-    from typing_extensions import Self
-
-    from paddle.base.core import _ProfilerResult
 
 
 class SummaryView(Enum):
@@ -133,7 +128,7 @@ def make_scheduler(
     record: int,
     repeat: int = 0,
     skip_first: int = 0,
-) -> Callable[[int], ProfilerState]:
+) -> Callable:
     r"""
     Return a scheduler function, which scheduler the :ref:`ProfilerState <api_paddle_profiler_ProfilerState>` according to the setting.
     The state transform confirms to:
@@ -226,7 +221,7 @@ def _default_state_scheduler(step: int):
 
 def export_chrome_tracing(
     dir_name: str, worker_name: str | None = None
-) -> Callable[[Profiler], None]:
+) -> Callable:
     r"""
     Return a callable, used for outputing tracing data to chrome tracing format file.
     The output file will be saved in directory ``dir_name``, and file name will be set as `worker_name`.
@@ -277,9 +272,7 @@ def export_chrome_tracing(
     return handle_fn
 
 
-def export_protobuf(
-    dir_name: str, worker_name: str | None = None
-) -> Callable[[Profiler], None]:
+def export_protobuf(dir_name: str, worker_name: str | None = None) -> Callable:
     r"""
     Return a callable, used for outputing tracing data to protobuf file.
     The output file will be saved in directory ``dir_name``, and file name will be set as ``worker_name``.
@@ -485,36 +478,19 @@ class Profiler:
                 >>> # |       ips       |    1086.42904   |    1227.30604   |    959.92796    |
     """
 
-    targets: Iterable[ProfilerTarget]
-    profiler: _Profiler
-    scheduler: Callable[[int], ProfilerState]
-    on_trace_ready: Callable[[Profiler], None]
-    step_num: int
-    previous_state: ProfilerState
-    current_state: ProfilerState
-    record_event: RecordEvent
-    profiler_result: _ProfilerResult
-    timer_only: bool
-    record_shapes: bool
-    profile_memory: bool
-    with_flops: bool
-    emit_nvtx: bool
-
     def __init__(
         self,
         *,
         targets: Iterable[ProfilerTarget] | None = None,
-        scheduler: (
-            Callable[[int], ProfilerState] | tuple[int, int] | None
-        ) = None,
-        on_trace_ready: Callable[[Profiler], None] | None = None,
-        record_shapes: bool = False,
-        profile_memory: bool = False,
-        timer_only: bool = False,
-        emit_nvtx: bool = False,
-        custom_device_types: list[str] = [],
-        with_flops: bool = False,
-    ) -> None:
+        scheduler: Callable[[int], ProfilerState] | tuple | None = None,
+        on_trace_ready: Callable[..., Any] | None = None,
+        record_shapes: bool | None = False,
+        profile_memory: bool | None = False,
+        timer_only: bool | None = False,
+        emit_nvtx: bool | None = False,
+        custom_device_types: list | None = [],
+        with_flops: bool | None = False,
+    ):
         supported_targets = _get_supported_targets()
         if targets:
             self.targets = set(targets)
@@ -577,19 +553,14 @@ class Profiler:
         self.with_flops = with_flops
         self.emit_nvtx = emit_nvtx
 
-    def __enter__(self) -> Self:
+    def __enter__(self):
         self.start()
         return self
 
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_val: BaseException | None,
-        exc_tb: TracebackType | None,
-    ) -> None:
+    def __exit__(self, exc_type, exc_val, exc_tb):
         self.stop()
 
-    def start(self) -> None:
+    def start(self):
         r'''
         Start profiler and enter the first profiler step(0).
         State transformed from CLOSED to self.current_state and trigger corresponding action.
@@ -638,7 +609,7 @@ class Profiler:
         )
         self.record_event.begin()
 
-    def stop(self) -> None:
+    def stop(self):
         r'''
         Stop profiler and State transformed from self.current_state to CLOSED.
         Trigger corresponding action and post-process profiler result using self.on_trace_ready if result exists.
@@ -688,7 +659,7 @@ class Profiler:
                 self.on_trace_ready(self)
         utils._is_profiler_used = False
 
-    def step(self, num_samples: int | None = None) -> None:
+    def step(self, num_samples: int | None = None):
         r"""
         Signals the profiler that the next profiling step has started.
         Get the new ProfilerState and trigger corresponding action.
@@ -732,7 +703,7 @@ class Profiler:
         )
         self.record_event.begin()
 
-    def step_info(self, unit: str | None = None) -> str:
+    def step_info(self, unit=None):
         r"""
         Get statistics for current step. If the function is called at certain iteration
         intervals, the result is the average of all steps between the previous call and
@@ -850,7 +821,7 @@ class Profiler:
             if self.on_trace_ready:
                 self.on_trace_ready(self)
 
-    def export(self, path: str = "", format: str = "json") -> None:
+    def export(self, path="", format="json"):
         r"""
         Exports the tracing data to file.
 
@@ -882,12 +853,12 @@ class Profiler:
 
     def summary(
         self,
-        sorted_by: SortedKeys = SortedKeys.CPUTotal,
-        op_detail: bool = True,
-        thread_sep: bool = False,
-        time_unit: Literal['s', 'ms', 'us', 'ns'] = 'ms',
-        views: SummaryView | list[SummaryView] | None = None,
-    ) -> None:
+        sorted_by=SortedKeys.CPUTotal,
+        op_detail=True,
+        thread_sep=False,
+        time_unit='ms',
+        views=None,
+    ):
         r"""
         Print the Summary table. Currently support overview, model, distributed, operator, memory manipulation and user-defined summary.
 
@@ -895,7 +866,7 @@ class Profiler:
             sorted_by( :ref:`SortedKeys <api_paddle_profiler_SortedKeys>` , optional): how to rank the op table items, default value is SortedKeys.CPUTotal.
             op_detail(bool, optional): expand each operator detail information, default value is True.
             thread_sep(bool, optional): print op table each thread, default value is False.
-            time_unit(str, optional): time unit for display, can be chosen from ['s', 'ms', 'us', 'ns'], default value is 'ms'.
+            time_unit(str, optional): time unit for display, can be chosen form ['s', 'ms', 'us', 'ns'], default value is 'ms'.
             views(SummaryView|list[SummaryView], optional): summary tables to print, default to None means all views to be printed.
 
         Examples:

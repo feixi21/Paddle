@@ -25,7 +25,6 @@ from ...base.framework import (
     EagerParamBase,
     default_main_program,
     in_dygraph_mode,
-    use_pir_api,
 )
 from .lazy_init import lazy_init_helper
 
@@ -87,10 +86,7 @@ class Initializer:
         def init_op_creator(
             forward, param: paddle.Tensor, block: paddle.pir.Block | None
         ):
-            if use_pir_api():
-                new_var = param
-            else:
-                new_var = param._to_static_var(True, block=block)
+            new_var = param._to_static_var(True, block=block)
             # Record initializer operator
             with lazy_init_helper():
                 forward(new_var, block)

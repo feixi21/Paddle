@@ -27,8 +27,6 @@ if TYPE_CHECKING:
     from paddle.base.core import task
     from paddle.distributed.communication.group import Group
 
-from paddle.distributed.utils.stream_utils import ExecutionStreamType
-
 
 def _all_gather_into_tensor_in_dygraph(
     out_tensor: Tensor,
@@ -132,7 +130,7 @@ def _all_gather_in_static_mode(
         },
     )
     if sync_op:
-        op.dist_attr.execution_stream = ExecutionStreamType.DefaultStream.value
+        op.dist_attr.execution_stream = "default"
     tensor_list.clear()
     # 0-D use stack/unstack while others use concat/split
     if len(tensor.shape) == 0:

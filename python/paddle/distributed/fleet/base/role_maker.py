@@ -12,14 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Definition of Role Makers."""
-from __future__ import annotations
-
 import os
 import re
 import time
 import warnings
 from multiprocessing import Manager, Process
-from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import numpy as np
 
@@ -31,18 +28,15 @@ from paddle.distributed.fleet.base.private_helper_function import (
 
 from ...backup_env import getenv_or_backup
 
-if TYPE_CHECKING:
-    import numpy.typing as npt
-
 __all__ = []
 
 
 class Role:
-    WORKER: ClassVar[Literal[1]] = 1
-    SERVER: ClassVar[Literal[2]] = 2
-    HETER_WORKER: ClassVar[Literal[3]] = 3
-    ALL: ClassVar[Literal[4]] = 4
-    COORDINATOR: ClassVar[Literal[5]] = 5
+    WORKER = 1
+    SERVER = 2
+    HETER_WORKER = 3
+    ALL = 4
+    COORDINATOR = 5
 
 
 class Gloo:
@@ -569,7 +563,7 @@ class PaddleCloudRoleMaker(RoleMakerBase):
 
     """
 
-    def __init__(self, is_collective: bool = False, **kwargs: Any) -> None:
+    def __init__(self, is_collective=False, **kwargs):
         super().__init__()
         self._is_collective = is_collective
         self._non_distributed = False
@@ -595,20 +589,16 @@ class PaddleCloudRoleMaker(RoleMakerBase):
 
         self._gloo = Gloo()  # gloo instance
 
-    def _barrier(self, comm_world: str) -> None:
+    def _barrier(self, comm_world):
         self._gloo.barrier(comm_world)
 
-    def _all_gather(
-        self, input: Any, comm_world: str = "worker"
-    ) -> list[float]:
+    def _all_gather(self, input, comm_world="worker"):
         return self._gloo.all_gather(input, comm_world)
 
-    def _all_reduce(
-        self, input: Any, mode: str = "sum", comm_world: str = "worker"
-    ) -> npt.NDArray[Any]:
+    def _all_reduce(self, input, mode="sum", comm_world="worker"):
         return self._gloo.all_reduce(input, mode, comm_world)
 
-    def _heter_device(self) -> str:
+    def _heter_device(self):
         """
         return the heter device that current heter worker is using
         """
@@ -616,7 +606,7 @@ class PaddleCloudRoleMaker(RoleMakerBase):
             self._generate_role()
         return self._heter_trainer_device
 
-    def _heter_device_type(self) -> str:
+    def _heter_device_type(self):
         """
         return the heter device type that current heter worker is using
         """
@@ -624,7 +614,7 @@ class PaddleCloudRoleMaker(RoleMakerBase):
             self._generate_role()
         return self._heter_trainer_device_type
 
-    def _get_stage_id(self) -> int:
+    def _get_stage_id(self):
         """
         return stage id of current heter worker
         """
@@ -632,7 +622,7 @@ class PaddleCloudRoleMaker(RoleMakerBase):
             self._generate_role()
         return self._stage_id
 
-    def _get_stage_trainers(self) -> list[int]:
+    def _get_stage_trainers(self):
         """
         return trainer num of all stages
         """
@@ -640,7 +630,7 @@ class PaddleCloudRoleMaker(RoleMakerBase):
             self._generate_role()
         return self._stage_trainers
 
-    def _get_num_stage(self) -> int:
+    def _get_num_stage(self):
         """
         return stage num
         """
@@ -648,7 +638,7 @@ class PaddleCloudRoleMaker(RoleMakerBase):
             self._generate_role()
         return self._stage_num
 
-    def _is_worker(self) -> bool:
+    def _is_worker(self):
         """
         whether current process is worker
         """
@@ -656,7 +646,7 @@ class PaddleCloudRoleMaker(RoleMakerBase):
             self._generate_role()
         return self._role == Role.WORKER
 
-    def _is_server(self) -> bool:
+    def _is_server(self):
         """
         whether current process is server
         """
@@ -664,12 +654,12 @@ class PaddleCloudRoleMaker(RoleMakerBase):
             self._generate_role()
         return self._role == Role.SERVER
 
-    def _is_coordinator(self) -> bool:
+    def _is_coordinator(self):
         if not self._role_is_generated:
             self._generate_role()
         return self._role == Role.COORDINATOR
 
-    def _is_first_worker(self) -> bool:
+    def _is_first_worker(self):
         """
         whether current process is worker of rank 0
         """
@@ -677,7 +667,7 @@ class PaddleCloudRoleMaker(RoleMakerBase):
             self._generate_role()
         return self._role == Role.WORKER and self._current_id == 0
 
-    def _worker_index(self) -> int:
+    def _worker_index(self):
         """
         get index of current worker
         """
@@ -685,7 +675,7 @@ class PaddleCloudRoleMaker(RoleMakerBase):
             self._generate_role()
         return self._current_id
 
-    def _server_index(self) -> int:
+    def _server_index(self):
         """
         get index of current server
         """
@@ -693,7 +683,7 @@ class PaddleCloudRoleMaker(RoleMakerBase):
             self._generate_role()
         return self._current_id
 
-    def _role_id(self) -> int:
+    def _role_id(self):
         """
         get index of current node
         """
@@ -701,7 +691,7 @@ class PaddleCloudRoleMaker(RoleMakerBase):
             self._generate_role()
         return self._current_id
 
-    def _worker_num(self) -> int:
+    def _worker_num(self):
         """
         return the current number of worker
         """
@@ -709,7 +699,7 @@ class PaddleCloudRoleMaker(RoleMakerBase):
             self._generate_role()
         return self._trainers_num
 
-    def _server_num(self) -> int:
+    def _server_num(self):
         """
         return the current number of server
         """
@@ -721,7 +711,7 @@ class PaddleCloudRoleMaker(RoleMakerBase):
             else 0
         )
 
-    def _node_num(self) -> int:
+    def _node_num(self):
         """
         return the training node number
         """
@@ -729,7 +719,7 @@ class PaddleCloudRoleMaker(RoleMakerBase):
             self._generate_role()
         return self._nodes_num
 
-    def _get_node_num(self) -> int:
+    def _get_node_num(self):
         """
         return the training node number
         """
@@ -737,22 +727,22 @@ class PaddleCloudRoleMaker(RoleMakerBase):
             self._generate_role()
         return self._nodes_num
 
-    def _get_local_rank(self) -> str | None:
+    def _get_local_rank(self):
         if not self._role_is_generated:
             self._generate_role()
         return self._local_rank
 
-    def _get_local_device_ids(self) -> str | None:
+    def _get_local_device_ids(self):
         if not self._role_is_generated:
             self._generate_role()
         return self._local_device_ids
 
-    def _get_world_device_ids(self) -> str | None:
+    def _get_world_device_ids(self):
         if not self._role_is_generated:
             self._generate_role()
         return self._world_device_ids
 
-    def _get_trainer_endpoints(self) -> list[str]:
+    def _get_trainer_endpoints(self):
         """
         get endpoint of all trainers
         """
@@ -760,7 +750,7 @@ class PaddleCloudRoleMaker(RoleMakerBase):
             self._generate_role()
         return self._worker_endpoints
 
-    def _get_trainer_endpoint(self) -> str:
+    def _get_trainer_endpoint(self):
         if not self._role_is_generated:
             self._generate_role()
         assert (
@@ -768,7 +758,7 @@ class PaddleCloudRoleMaker(RoleMakerBase):
         ), "get_trainer_endpoint should be called by trainer"
         return self._cur_endpoint
 
-    def _get_heter_worker_endpoints(self) -> list[str]:
+    def _get_heter_worker_endpoints(self):
         """
         Returns:
             string: all heter_trainers'endpoints
@@ -780,10 +770,10 @@ class PaddleCloudRoleMaker(RoleMakerBase):
         ), "Heter Worker Endpoints Not initialized"
         return self._heter_trainer_endpoints
 
-    def _get_heter_worker_endpoint(self) -> str:
+    def _get_heter_worker_endpoint(self):
         """
         Returns:
-            str: corresponding heter_trainer's endpoint
+            int: corresponding heter_trainer's endpoint
         """
         if not self._role_is_generated:
             self._generate_role()
@@ -792,7 +782,7 @@ class PaddleCloudRoleMaker(RoleMakerBase):
         ), "_get_heter_worker_endpoint should be invoked by heter worker"
         return self._cur_endpoint
 
-    def _get_pserver_endpoints(self) -> list[str]:
+    def _get_pserver_endpoints(self):
         """
         get endpoint of all pservers
         """
@@ -800,7 +790,7 @@ class PaddleCloudRoleMaker(RoleMakerBase):
             self._generate_role()
         return self._server_endpoints
 
-    def _get_coordinator_endpoints(self) -> list[str]:
+    def _get_coordinator_endpoints(self):
         if not self._role_is_generated:
             self._generate_role()
         return self._coordinator_endpoints
@@ -817,7 +807,7 @@ class PaddleCloudRoleMaker(RoleMakerBase):
         ), "_get_previous_trainers should be invoked by trainer or heter worker"
         return self._previous_heter_trainer_endpoints
 
-    def _get_next_trainers(self) -> list[str]:
+    def _get_next_trainers(self):
         """
         invoked by heter worker
         """
@@ -829,7 +819,7 @@ class PaddleCloudRoleMaker(RoleMakerBase):
         ), "_get_next_trainers should be invoked by trainer or heter worker"
         return self._next_heter_trainer_endpoints
 
-    def _is_non_distributed(self) -> bool:
+    def _is_non_distributed(self):
         """
         Return True if indispensable environment for fleetrun is not found
         (use python-run to launch fleet-code directly)
@@ -838,7 +828,7 @@ class PaddleCloudRoleMaker(RoleMakerBase):
             self._generate_role()
         return self._non_distributed
 
-    def _heter_worker_num(self) -> int:
+    def _heter_worker_num(self):
         """
         get heter worker nums
         """
@@ -846,7 +836,7 @@ class PaddleCloudRoleMaker(RoleMakerBase):
             self._generate_role()
         return self._heter_trainers_num
 
-    def _is_heter_worker(self) -> bool:
+    def _is_heter_worker(self):
         """
         whether current process is heter worker
         """
@@ -854,7 +844,7 @@ class PaddleCloudRoleMaker(RoleMakerBase):
             self._generate_role()
         return self._role == Role.HETER_WORKER
 
-    def _ps_env(self) -> None:  # each role will execute it
+    def _ps_env(self):  # each role will execute it
         # Environment variable PADDLE_PSERVERS_IP_PORT_LIST must be set
         # format: string(ip:port,ip:port), eg. 127.0.0.1:6001,127.0.0.1:6002
         self._server_endpoints = os.getenv("PADDLE_PSERVERS_IP_PORT_LIST", None)
@@ -1094,7 +1084,7 @@ class PaddleCloudRoleMaker(RoleMakerBase):
         self._current_id = current_id
         self._nodes_num = len({x.split(':')[0] for x in self._worker_endpoints})
 
-    def _collective_env(self) -> None:
+    def _collective_env(self):
         self._current_id = int(os.getenv("PADDLE_TRAINER_ID", "0"))
         self._training_role = os.getenv("PADDLE_TRAINING_ROLE", "TRAINER")
         assert self._training_role == "TRAINER"
@@ -1117,7 +1107,7 @@ class PaddleCloudRoleMaker(RoleMakerBase):
         self._local_device_ids = os.getenv("PADDLE_LOCAL_DEVICE_IDS")
         self._world_device_ids = os.getenv("PADDLE_WORLD_DEVICE_IDS")
 
-    def _gloo_init(self) -> None:
+    def _gloo_init(self):
         # PADDLE_WITH_GLOO 1: trainer barrier, 2: all barrier
         use_gloo = int(os.getenv("PADDLE_WITH_GLOO", "0"))
         if use_gloo not in [1, 2]:
@@ -1196,7 +1186,7 @@ class PaddleCloudRoleMaker(RoleMakerBase):
         if rendezvous_type == Gloo.RENDEZVOUS.HTTP:
             http_server_d['running'] = False
 
-    def _generate_role(self) -> None:
+    def _generate_role(self):
         """
         generate role for role maker
         """
@@ -1227,18 +1217,13 @@ class UserDefinedRoleMaker(PaddleCloudRoleMaker):
             ...     server_endpoints=["127.0.0.1:36011", "127.0.0.1:36012"])
     """
 
-    def __init__(
-        self,
-        is_collective: bool = False,
-        init_gloo: bool = False,
-        **kwargs: Any,
-    ) -> None:
+    def __init__(self, is_collective=False, init_gloo=False, **kwargs):
         super().__init__(
             is_collective=is_collective, init_gloo=init_gloo, **kwargs
         )
         self._init_gloo = init_gloo
 
-    def _user_defined_ps_env(self) -> None:
+    def _user_defined_ps_env(self):
         self._server_endpoints = self._kwargs.get("server_endpoints")
         self._worker_endpoints = self._kwargs.get("worker_endpoints", [])
         self._trainers_num = self._kwargs.get("worker_num", 0)
@@ -1259,14 +1244,14 @@ class UserDefinedRoleMaker(PaddleCloudRoleMaker):
             self._cur_endpoint = self._server_endpoints[self._current_id]
         self._nodes_num = len({x.split(':')[0] for x in self._worker_endpoints})
 
-    def _user_defined_collective_env(self) -> None:
+    def _user_defined_collective_env(self):
         self._worker_endpoints = self._kwargs.get("worker_endpoints")
         self._current_id = self._kwargs.get("current_id")
         self._trainers_num = len(self._worker_endpoints)
         self._training_role = Role.WORKER
         self._nodes_num = len({x.split(':')[0] for x in self._worker_endpoints})
 
-    def _generate_role(self) -> None:
+    def _generate_role(self):
         """
         generate role for role maker
         """

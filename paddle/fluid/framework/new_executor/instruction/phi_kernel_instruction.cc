@@ -135,7 +135,6 @@ PhiKernelInstruction::PhiKernelInstruction(
                         .data();
   auto kernel_result = phi::KernelFactory::Instance().SelectKernelOrThrowError(
       kernel_name, kernel_key);
-  kernel_name_ = kernel_name;
   phi_kernel_ = new phi::Kernel(kernel_result.kernel);
   PADDLE_ENFORCE_EQ(
       phi_kernel_->IsValid(), true, "not found kernel for [%s]", kernel_name);
@@ -183,7 +182,7 @@ void PhiKernelInstruction::Run() {
   VLOG(6) << "Begin run op " << phi_op_name_ << " infer meta.";
   if (infer_meta_interface_) {
     phi::RecordEvent record_event("PhiKernelInstruction::infermeta",
-                                  phi::TracerEventType::UserDefined,
+                                  platform::TracerEventType::UserDefined,
                                   1);
     infer_meta_interface_->infer_meta_(&(infer_meta_context_));
   }
@@ -193,8 +192,8 @@ void PhiKernelInstruction::Run() {
   }
   VLOG(6) << "Begin run op " << phi_op_name_ << " kernel.";
   {
-    phi::RecordEvent record_event(kernel_name_ + " kernel launch",
-                                  phi::TracerEventType::StaticKernelLaunch,
+    phi::RecordEvent record_event("PhiKernelInstruction::kernel launch",
+                                  platform::TracerEventType::UserDefined,
                                   1);
     (*(phi_kernel_))(&(kernel_context_));
   }

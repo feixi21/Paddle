@@ -63,10 +63,11 @@ class ReshardOp : public pir::Op<ReshardOp, VjpInterface, OpYamlInfoInterface> {
   void VerifySig();
 };
 
-class MoESubMeshTensorsOp : public pir::Op<MoESubMeshTensorsOp, VjpInterface> {
+class LocalTensorsFromDistOp
+    : public pir::Op<LocalTensorsFromDistOp, VjpInterface> {
  public:
   using Op::Op;
-  static const char* name() { return "dist_op.moe_sub_mesh_tensors"; }
+  static const char* name() { return "dist_op.local_tensors_from_dtensor"; }
   static const char* attributes_name[1];
   static constexpr uint32_t attributes_num = 1;
   TEST_API static void Build(
@@ -88,11 +89,11 @@ class MoESubMeshTensorsOp : public pir::Op<MoESubMeshTensorsOp, VjpInterface> {
   std::vector<pir::Value> results() { return operation()->results(); }
 };
 
-class MoEGlobalMeshTensorOp
-    : public pir::Op<MoEGlobalMeshTensorOp, VjpInterface> {
+class DistTensorFromLocalsOp
+    : public pir::Op<DistTensorFromLocalsOp, VjpInterface> {
  public:
   using Op::Op;
-  static const char* name() { return "dist_op.moe_global_mesh_tensor"; }
+  static const char* name() { return "dist_op.dtensor_from_local_tensors"; }
   static const char* attributes_name[1];
   static constexpr uint32_t attributes_num = 1;
   TEST_API static void Build(
@@ -120,5 +121,5 @@ class MoEGlobalMeshTensorOp
 
 IR_DECLARE_EXPLICIT_TYPE_ID(paddle::dialect::ShardTensorOp)
 IR_DECLARE_EXPLICIT_TYPE_ID(paddle::dialect::ReshardOp)
-IR_DECLARE_EXPLICIT_TYPE_ID(paddle::dialect::MoESubMeshTensorsOp)
-IR_DECLARE_EXPLICIT_TYPE_ID(paddle::dialect::MoEGlobalMeshTensorOp)
+IR_DECLARE_EXPLICIT_TYPE_ID(paddle::dialect::LocalTensorsFromDistOp)
+IR_DECLARE_EXPLICIT_TYPE_ID(paddle::dialect::DistTensorFromLocalsOp)

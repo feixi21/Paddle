@@ -42,15 +42,9 @@ void GetBroadcastShape(const Tensor& a,
                        std::vector<bool>* broadcast_flag2,
                        int* axis_offset,
                        const Expr& axis) {
-  PADDLE_ENFORCE_NOT_NULL(
-      common_shape,
-      ::common::errors::PreconditionNotMet("common_shape should not be null."));
-  PADDLE_ENFORCE_NOT_NULL(broadcast_flag1,
-                          ::common::errors::PreconditionNotMet(
-                              "broadcast_flag1 should not be null."));
-  PADDLE_ENFORCE_NOT_NULL(broadcast_flag2,
-                          ::common::errors::PreconditionNotMet(
-                              "broadcast_flag2 should not be null."));
+  CHECK(common_shape);
+  CHECK(broadcast_flag1);
+  CHECK(broadcast_flag2);
 
   const auto& shape1 = a->shape;
   const auto& shape2 = b->shape;
@@ -124,20 +118,12 @@ void GetBroadcastShape(const Tensor& a,
       broadcast_flag1->emplace_back(true);
       broadcast_flag2->emplace_back(true);
     } else if (MathEqual(one, shape1_new[size1 - i])) {
-      PADDLE_ENFORCE_EQ(
-          MathEqual(one, shape2_new[size2 - i]),
-          false,
-          ::common::errors::PreconditionNotMet(
-              "MathEqual(one, shape2_new[size2 - i]) should be false."));
+      CHECK(!MathEqual(one, shape2_new[size2 - i]));
       common_shape->insert(common_shape->begin(), shape2_new[size2 - i]);
       broadcast_flag1->emplace_back(false);
       broadcast_flag2->emplace_back(true);
     } else if (MathEqual(one, shape2_new[size2 - i])) {
-      PADDLE_ENFORCE_EQ(
-          MathEqual(one, shape1_new[size1 - i]),
-          false,
-          ::common::errors::PreconditionNotMet(
-              "MathEqual(one, shape1_new[size1 - i]) should be false."));
+      CHECK(!MathEqual(one, shape1_new[size1 - i]));
       common_shape->insert(common_shape->begin(), shape1_new[size1 - i]);
       broadcast_flag1->emplace_back(true);
       broadcast_flag2->emplace_back(false);
@@ -203,12 +189,8 @@ void GetBroadcastIndice(const std::vector<Expr>& indice,
                         std::vector<Expr>* broadcast_indice2,
                         const std::vector<bool>& broadcast_flags1,
                         const std::vector<bool>& broadcast_flags2) {
-  PADDLE_ENFORCE_NOT_NULL(broadcast_indice1,
-                          ::common::errors::PreconditionNotMet(
-                              "broadcast_indice1 should not be null."));
-  PADDLE_ENFORCE_NOT_NULL(broadcast_indice2,
-                          ::common::errors::PreconditionNotMet(
-                              "broadcast_indice2 should not be null."));
+  CHECK(broadcast_indice1);
+  CHECK(broadcast_indice2);
   if (broadcast_indice1->empty() && broadcast_indice2->empty()) {
     int flag_size = broadcast_flags1.size();
     int i;

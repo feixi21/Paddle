@@ -124,9 +124,8 @@ class XavierInitializer(Initializer):
             else var.shape
         )
         # to be compatible of fp16 initializers
-        origin_dtype = var.dtype
-        if origin_dtype == core.VarDesc.VarType.FP16 or (
-            origin_dtype == core.VarDesc.VarType.BF16 and not self._uniform
+        if var.dtype == core.VarDesc.VarType.FP16 or (
+            var.dtype == core.VarDesc.VarType.BF16 and not self._uniform
         ):
             out_dtype = core.VarDesc.VarType.FP32
             out_var = block.create_var(
@@ -139,13 +138,13 @@ class XavierInitializer(Initializer):
                 persistable=False,
             )
         elif (
-            origin_dtype in (core.DataType.FLOAT16, core.DataType.BFLOAT16)
+            var.dtype in (core.DataType.FLOAT16, core.DataType.BFLOAT16)
             and not self._uniform
         ):
             out_dtype = core.DataType.FLOAT32
             out_var = var
         else:
-            out_dtype = origin_dtype
+            out_dtype = var.dtype
             out_var = var
 
         if in_dygraph_mode():
@@ -172,16 +171,10 @@ class XavierInitializer(Initializer):
                     place,
                 )
 
-            if origin_dtype == core.VarDesc.VarType.FP16 or (
-                origin_dtype
-                in [
-                    core.VarDesc.VarType.BF16,
-                    core.DataType.FLOAT16,
-                    core.DataType.BFLOAT16,
-                ]
-                and not self._uniform
+            if var.dtype == core.VarDesc.VarType.FP16 or (
+                var.dtype == core.VarDesc.VarType.BF16 and not self._uniform
             ):
-                out_var = _C_ops.cast(out_var, origin_dtype)
+                out_var = _C_ops.cast(out_var, var.dtype)
             if isinstance(var, framework.EagerParamBase) and var.is_dist():
                 # lazy init for dist tensor
                 out_var = (
@@ -214,10 +207,10 @@ class XavierInitializer(Initializer):
                 )
 
             if (
-                origin_dtype in (core.DataType.FLOAT16, core.DataType.BFLOAT16)
+                var.dtype in (core.DataType.FLOAT16, core.DataType.BFLOAT16)
                 and not self._uniform
             ):
-                return _C_ops.cast(out_var, origin_dtype)
+                return _C_ops.cast(out_var, var.dtype)
 
             return out_var
         else:
@@ -251,17 +244,14 @@ class XavierInitializer(Initializer):
                     stop_gradient=True,
                 )
 
-            if origin_dtype == core.VarDesc.VarType.FP16 or (
-                origin_dtype == core.VarDesc.VarType.BF16 and not self._uniform
+            if var.dtype == core.VarDesc.VarType.FP16 or (
+                var.dtype == core.VarDesc.VarType.BF16 and not self._uniform
             ):
                 block.append_op(
                     type="cast",
                     inputs={"X": out_var},
                     outputs={"Out": var},
-                    attrs={
-                        "in_dtype": out_var.dtype,
-                        "out_dtype": origin_dtype,
-                    },
+                    attrs={"in_dtype": out_var.dtype, "out_dtype": var.dtype},
                 )
 
             var.op = op

@@ -41,23 +41,21 @@ class SymbolicValue(metaclass=Singleton):
 
 
 class SymbolicBool(SymbolicValue):
-    def get_static_type(self) -> type[bool]:
+    def get_static_type(self) -> type:
         return bool
 
 
 class SymbolicInt(SymbolicValue):
-    def get_static_type(self) -> type[int]:
+    def get_static_type(self) -> type:
         return int
 
 
 class SymbolicFloat(SymbolicValue):
-    def get_static_type(self) -> type[float]:
+    def get_static_type(self) -> type:
         return float
 
 
 class MetaInfo:
-    shape: list[int | SymbolicInt]
-
     def __init__(
         self,
         shape,
@@ -75,7 +73,7 @@ class MetaInfo:
         self.persistable = persistable
         self.type = type
         self.place = place
-        self.shape = shape
+        self.shape: list[int | SymbolicInt] = shape
         self.dtype = dtype
         self.stop_gradient = stop_gradient
 
@@ -83,7 +81,7 @@ class MetaInfo:
         self, dynamic_symbol: DynamicSymbolT = -1
     ) -> list[int | DynamicSymbolT]:
         return [
-            dynamic_symbol if isinstance(dim, SymbolicInt) else dim
+            dim if not isinstance(dim, SymbolicInt) else dynamic_symbol
             for dim in self.shape
         ]
 
@@ -112,15 +110,19 @@ class MetaInfo:
 
     @staticmethod
     def _handle_legacy_ir_amp_dtype(dtype):
-        # TODO(cleanup-legacy-ir) remove after pir become default state.
-        # We always use float32 in simulation if AMP is enabled.
-        if use_pir_api():
-            return dtype
-        assert isinstance(dtype, paddle.core.VarDesc.VarType)
+        expected_dtype_class = (
+            paddle.core.DataType
+            if paddle.framework.use_pir_api()
+            else paddle.core.VarDesc.VarType
+        )
+        assert isinstance(dtype, expected_dtype_class)
 
+        # TODO(@xiongkun) remove after pir become default state.
+        # We always use float32 in simulation if AMP is enabled.
         current_amp_state = amp_state()
         if (
-            dtype == paddle.float16
+            not use_pir_api()
+            and dtype == paddle.float16
             and current_amp_state is not None
             and current_amp_state["dtype"] == "float16"
         ):
@@ -306,9 +308,10 @@ class VariableCreator(metaclass=Singleton):
                 if isinstance(func, str):
                     # TODO(Aurelius84): Is length of args always greater than 0?
                     # Do we need add condition check here?
-                    func = getattr(args[0], func)
-                    args = args[1:]
-                out = func(*args, **kwargs)
+                    out = getattr(args[0], func)(*args[1:], **kwargs)
+                else:
+                    out = func(*args, **kwargs)
+
         return convert_variable_to_meta_info(out)
 
 

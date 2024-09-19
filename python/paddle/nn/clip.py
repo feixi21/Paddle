@@ -234,7 +234,7 @@ def _cast_to_mp_type_if_enabled(x):
     elif (
         x.dtype == DataType.FLOAT16 or x.dtype == DataType.BFLOAT16
     ) and _clip_by_global_norm_using_mp_type():
-        return x.astype(DataType.FLOAT32)
+        return x.astype(DataType.FP32)
     else:
         return x
 
@@ -846,14 +846,7 @@ class ClipGradByGlobalNorm(ClipGradBase):
                     if pp_stage0_mesh is None:
                         pp_stage0_mesh = p.dist_attr().process_mesh
                     else:
-                        p_mesh = p.dist_attr().process_mesh
-                        if set(pp_stage0_mesh.process_ids) < set(
-                            p_mesh.process_ids
-                        ):
-                            pp_stage0_mesh = p_mesh
-                        assert set(p_mesh.process_ids) <= set(
-                            pp_stage0_mesh.process_ids
-                        )
+                        assert p.dist_attr().process_mesh == pp_stage0_mesh
 
         if len(pp_meshes) > 1:
             from paddle.distributed.auto_parallel.placement_type import (

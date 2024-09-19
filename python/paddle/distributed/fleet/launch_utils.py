@@ -545,13 +545,12 @@ def start_local_trainers(
             or os.environ.get("WITH_COVERAGE", "OFF") == "ON"
         ):
             coverage_args = ["-m", "coverage", "run", "--branch", "-p"]
-        cmd = [
-            sys.executable,
-            "-u",
-            *coverage_args,
-            training_script,
-            *training_script_args,
-        ]
+        cmd = (
+            [sys.executable, "-u"]
+            + coverage_args
+            + [training_script]
+            + training_script_args
+        )
 
         logger.debug(f"start trainer proc{cmd}  env:{current_env}")
 
@@ -802,8 +801,7 @@ def direct_start(args):
         sys.executable,
         "-u",
         args.training_script,
-        *args.training_script_args,
-    ]
+    ] + args.training_script_args
     proc = subprocess.Popen(cmd)
     proc.wait()
 
@@ -1374,9 +1372,8 @@ class ParameterServerLauncher:
                     self.heter_worker_endpoints += ip_port_list
 
             self.stage_trainer_num = [
-                self.worker_num,
-                *self.stage_heter_trainer_num,
-            ]
+                self.worker_num
+            ] + self.stage_heter_trainer_num
             self.stage_num = len(self.stage_trainer_num)
 
         # get http_port
@@ -1623,8 +1620,7 @@ class ParameterServerLauncher:
                 sys.executable,
                 "-u",
                 args.training_script,
-                *args.training_script_args,
-            ]
+            ] + args.training_script_args
             self.cmds["server"].append(cmd)
 
             if idx == 0:
@@ -1732,8 +1728,7 @@ class ParameterServerLauncher:
                 sys.executable,
                 "-u",
                 args.training_script,
-                *args.training_script_args,
-            ]
+            ] + args.training_script_args
             self.cmds["worker"].append(cmd)
 
             if idx == 0:
@@ -1749,7 +1744,9 @@ class ParameterServerLauncher:
 
             if args.log_dir is not None:
                 os.makedirs(args.log_dir, exist_ok=True)
-                fn = open("%s/workerlog.%d" % (args.log_dir, idx), "w")
+                fn = open(
+                    "%s/workerlog.%d" % (args.log_dir, cur_worker.rank), "w"
+                )
                 self.log_fns["worker"].append(fn)
                 proc = subprocess.Popen(
                     cmd, env=current_env, stdout=fn, stderr=fn
@@ -1801,8 +1798,7 @@ class ParameterServerLauncher:
                 sys.executable,
                 "-u",
                 args.training_script,
-                *args.training_script_args,
-            ]
+            ] + args.training_script_args
             self.cmds["coordinator"].append(cmd)
 
             if idx == 0:
@@ -1893,8 +1889,7 @@ class ParameterServerLauncher:
                 sys.executable,
                 "-u",
                 args.training_script,
-                *args.training_script_args,
-            ]
+            ] + args.training_script_args
             self.cmds["heter_worker"].append(cmd)
 
             if idx == 0:

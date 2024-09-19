@@ -14,8 +14,6 @@ limitations under the License. */
 
 #include "paddle/fluid/operators/collective/global_scatter_op.h"
 
-#include "paddle/common/enforce.h"
-
 namespace paddle::operators {
 
 class GlobalScatterOp : public framework::OperatorWithKernel {

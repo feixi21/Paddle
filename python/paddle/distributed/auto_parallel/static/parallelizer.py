@@ -409,12 +409,11 @@ class AutoParallelizer:
                 + " "
                 + original_cmd_args
             )
-            new_cmd = [
-                sys.executable,
-                "-u",
-                *coverage_args,
-                *shlex.split(new_cmd_args),
-            ]
+            new_cmd = (
+                [sys.executable, "-u"]
+                + coverage_args
+                + shlex.split(new_cmd_args)
+            )
             new_process = subprocess.Popen(new_cmd)
             new_process.wait()
             assert (

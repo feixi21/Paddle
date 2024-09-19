@@ -78,7 +78,6 @@ prim_white_list = [
     "abs_triple_grad",
     "exp_double_grad",
     "log_double_grad",
-    "where_double_grad",
 ]
 
 # white ops list whose kernel can automatically do type promotion.
@@ -142,14 +141,17 @@ strided_op_list = {
     "imag",
     "diagonal",
     "flatten",
+    "flatten_infer",
     "reshape",
     "slice",
+    "squeeze_infer",
     "squeeze",
     "strided_slice",
     "strided_slice_raw",
     "tensor_unfold",
     "transpose",
     "unbind",
+    "unsqueeze_infer",
     "unsqueeze",
     "view_shape",
     "view_dtype",
@@ -162,12 +164,15 @@ strided_op_need_flags_check_list = {
     "real_",
     "imag_",
     "diagonal_",
+    "flatten_infer_",
     "slice_",
+    "squeeze_infer_",
     "strided_slice_",
     "strided_slice_raw_",
     "tensor_unfold_",
     "transpose_",
     "unbind_",
+    "unsqueeze_infer_",
     "view_shape_",
     "view_dtype_",
 }
@@ -272,7 +277,7 @@ paddle::small_vector<std::vector<paddle::Tensor>, egr::kSlotSmallVectorSize> {}:
    // * 'Local_XXXGradNode' will only cover execution time of this function.
    // * 'Global_XXXGradNode' will not only cover execution time of this function, but also include gradient
    //    accumulation when the output(s) of corresponding forward OP are shared by other OP(s), which may have extra accumulation overhead than 'Local_XXXGradNode'.
-  phi::RecordEvent grad_node_record_event_inner(\"Local_{}\", phi::TracerEventType::OperatorInner, 1);
+  phi::RecordEvent grad_node_record_event_inner(\"Local_{}\", paddle::platform::TracerEventType::OperatorInner, 1);
 
   // Fill Zero For GradIn Tensors
 {}
@@ -600,12 +605,11 @@ AMP_LOGIC_TEMPLATE = """  if (egr::Controller::Instance().GetAMPLevel() != paddl
   }}
 """
 
-TYPE_PROMOTION_LOGIC_TEMPLATE = """
-    if (phi::NeedTypePromotion({op_func_name}, {x}.dtype(), {y}.dtype(), {x}.shape(), {y}.shape())) {{
+TYPE_PROMOTION_LOGIC_TEMPLATE = """   if (phi::NeedTypePromotion({op_func_name}, {x}.dtype(), {y}.dtype())) {{
     VLOG(5) << "got different data type, run type promotion automatically.";
     LOG_FIRST_N(WARNING, 1) << "got different data type, run type promotion automatically, this may cause data type been changed.";
     {op_name}
-    auto promotion_type = phi::GetPromoteDtype(op_name, {x}.dtype(), {y}.dtype(), {x}.shape(), {y}.shape());
+    auto promotion_type = phi::GetPromoteDtype(op_name, {x}.dtype(), {y}.dtype());
 
     {x_cast}
     auto new_{y} = egr::PromoteCast("{y}", {y}, promotion_type);
@@ -1304,7 +1308,7 @@ class DygraphFunctionGeneratorBase(FunctionGeneratorBase):
         set_grad_in_meta_str = "\n".join(set_grad_in_meta_list)
 
         node_event_name = forward_api_name + " node_creation"
-        node_creation_event_str = f'{indent}phi::RecordEvent node_creation_record_event("{node_event_name}", phi::TracerEventType::OperatorInner, 1);\n'
+        node_creation_event_str = f'{indent}phi::RecordEvent node_creation_record_event("{node_event_name}", paddle::platform::TracerEventType::OperatorInner, 1);\n'
         self.node_creation_str = ""
         if not for_backward:
             self.node_creation_before_call_str = (
@@ -1883,7 +1887,7 @@ class DygraphForwardFunctionGenerator(DygraphFunctionGeneratorBase):
                 inputs_call_args_str_tmp = ", ".join(self.inputs_call_list_tmp)
                 forward_call_str = f"{indent}{api_out_type} api_result = paddle::experimental::{namespace}{function_name}({inputs_call_args_str_tmp});"
 
-        dygraph_event_str = f'{indent}phi::RecordEvent dygraph_entrance_record_event("{forward_api_name} dygraph", phi::TracerEventType::Operator, 1);\n'
+        dygraph_event_str = f'{indent}phi::RecordEvent dygraph_entrance_record_event("{forward_api_name} dygraph", paddle::platform::TracerEventType::Operator, 1);\n'
         log_memory_info_str = f'{indent}paddle::memory::LogDeviceMemoryStats(egr::Controller::Instance().GetExpectedPlace(), "{forward_api_name}");'
         forward_ad_function_name = GetDygraphForwardFunctionName(
             forward_api_name

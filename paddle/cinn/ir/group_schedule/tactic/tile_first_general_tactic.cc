@@ -23,7 +23,28 @@
 namespace cinn {
 namespace ir {
 
-using cinn::ir::analyzer::IsReductionSBlock;
+bool IsInnerThreadSpatialLoopGT(const ScheduleConfig& config, int num) {
+  return config.tile_config.spatial_inner_num > num;
+}
+
+bool IsReduceBlock(const ScheduleConfig& config, const std::string& block_id) {
+  return config.base_info->reduce_tensor_names.count(block_id) > 0;
+}
+
+bool HasReduceAxis(const ScheduleConfig& config) {
+  return config.base_info->reduce_axis.size() > 0;
+}
+
+bool IsWarpReduce(const ScheduleConfig& config) {
+  const auto& MatchWarpReduce = cinn::adt::match{
+      [&](const ir::NoneReduceMethod&) { return false; },
+      [&](const ir::WarpReduceMethod&) { return true; },
+      [&](const ir::BlockReduceMethod&) { return false; },
+      [&](const ir::DiscreteReduceMethod&) { return false; },
+      [&](const ir::IntervalReduceMethod&) { return false; },
+  };
+  return std::visit(MatchWarpReduce, config.tile_config.reduce_method);
+}
 
 bool UseContinuousDataTile(const ScheduleConfig& config) {
   if (config.base_info->reduce_axis.empty()) {
@@ -54,12 +75,14 @@ class TileFirstGeneralTactic final : public ScheduleTactic {
   void Init(ScheduleContext* context) override;
 
   void Apply(ir::IRSchedule* sch, const std::string& block_id) override;
-  void ApplyContinuousDataTile(ir::IRSchedule* sch,
-                               const std::string& block_id);
 
   std::string TacticName() const override { return "TileFirstGeneralTactic"; }
 
  private:
+  void ApplyContinuousReduce(ir::IRSchedule* sch, const std::string& block_id);
+  void ApplyDiscreteReduce(ir::IRSchedule* sch, const std::string& block_id);
+  void ApplyIntervalReduce(ir::IRSchedule* sch, const std::string& block_id);
+
   void AlignToReduceInput(ir::IRSchedule* sch, const std::string& block_id);
   void MergeFlattenAxis(ir::IRSchedule* sch, const std::string& block_id);
   void MergeDiscreteFlattenAxis(ir::IRSchedule* sch,
@@ -70,6 +93,7 @@ class TileFirstGeneralTactic final : public ScheduleTactic {
   void VariableTypeAssignment(ir::IRSchedule* sch, const std::string& block_id);
   void SetReduceType(ir::IRSchedule* sch, const std::string& block_id);
   void SetDiscreteReduceType(ir::IRSchedule* sch, const std::string& block_id);
+  void SetIntervalReduceType(ir::IRSchedule* sch, const std::string& block_id);
   void BindCudaInfo(ir::IRSchedule* sch, const std::string& block_id);
 
  private:
@@ -78,18 +102,63 @@ class TileFirstGeneralTactic final : public ScheduleTactic {
   std::vector<int32_t> vec_spatial_axis_last_;
   std::vector<int32_t> vec_flatten_axis_;
   std::vector<int32_t> vec_reduce_axis_;
-  std::unordered_map<std::string, std::string> map_rf_block_;
+
+  std::vector<bool> vec_is_reduce_;
+  std::vector<int64_t> loop_perm_;
+  int64_t num_lower_reduce_axes_;
+  int64_t lower_reduce_extend_;  // -1 means dynamic shape
 };
 
 void TileFirstGeneralTactic::Init(ScheduleContext* context) {
   context_ = context;
 
-  // reduce axes have been re-ordered to the last
+  const size_t num_loops = context_->config.base_info->data_space.size();
+  vec_is_reduce_.assign(num_loops, false);
+  for (int64_t axis : context_->config.base_info->reduce_axis) {
+    vec_is_reduce_[axis] = true;
+  }
+
+  const auto& loop_strides = context_->config.base_info->loop_strides;
+  loop_perm_.clear();
+  if (!loop_strides.empty()) {
+    loop_perm_.resize(num_loops);
+    std::iota(loop_perm_.begin(), loop_perm_.end(), 0);
+    std::sort(loop_perm_.begin(), loop_perm_.end(), [&](int64_t a, int64_t b) {
+      return loop_strides[a] > loop_strides[b];
+    });
+  }
+
+  num_lower_reduce_axes_ = 0;
+  lower_reduce_extend_ = 1;
+  for (int i = loop_perm_.size() - 1; i >= 0; i--) {
+    int axis = loop_perm_[i];
+    if (loop_strides[axis] == 0) {
+      continue;
+    }
+    if (!vec_is_reduce_[axis]) {
+      break;
+    }
+    num_lower_reduce_axes_++;
+
+    const int64_t data_space = context_->config.base_info->data_space[axis];
+    if (data_space == -1) {
+      lower_reduce_extend_ = -1;
+    } else if (lower_reduce_extend_ != -1) {
+      lower_reduce_extend_ =
+          std::max(data_space * loop_strides[axis], lower_reduce_extend_);
+    }
+  }
+
+  VLOG(4) << "loop_perm: " << utils::Join(loop_perm_, ", ");
+  VLOG(4) << "num_lower_reduce_axes: " << num_lower_reduce_axes_;
+  VLOG(4) << "lower_reduce_extend: " << lower_reduce_extend_;
+
+  // reduce axis have be re-order to last
   vec_flatten_axis_.clear();
   vec_reduce_axis_.clear();
-  int32_t reduce_start_idx = context_->config.base_info->data_rank -
-                             context_->config.base_info->reduce_axis.size();
-  for (int32_t i = 0; i < context_->config.base_info->data_rank; ++i) {
+  int32_t reduce_start_idx =
+      num_loops - context_->config.base_info->reduce_axis.size();
+  for (int32_t i = 0; i < num_loops; ++i) {
     if (i >= reduce_start_idx) {
       vec_reduce_axis_.push_back(i);
     } else {
@@ -122,43 +191,26 @@ void TileFirstGeneralTactic::Apply(ir::IRSchedule* sch,
   if (ir::IsReduceInitTensorName(block_id)) return;
 
   AlignToReduceInput(sch, block_id);
-  VLOG(6) << "After AlignToReduceInput on block: [" << block_id
+  VLOG(4) << "After AlignToReduceInput on block: [" << block_id
           << "], loop nest:\n"
           << sch->GetLoops(block_id)[0];
 
-  if (UseContinuousDataTile(context_->config)) {
-    VLOG(4) << "Using ApplyContinuousDataTile";
-    ApplyContinuousDataTile(sch, block_id);
-    return;
+  if (num_lower_reduce_axes_) {
+    if (lower_reduce_extend_ <= 16 && lower_reduce_extend_ != -1) {
+      ApplyIntervalReduce(sch, block_id);
+    } else {
+      ApplyContinuousReduce(sch, block_id);
+    }
+  } else {
+    if (vec_reduce_axis_.empty()) {
+      ApplyContinuousReduce(sch, block_id);
+    } else {
+      ApplyDiscreteReduce(sch, block_id);
+    }
   }
-
-  MergeReduceAxis(sch, block_id);
-  VLOG(6) << "After MergeReduceAxis on block: [" << block_id
-          << "], loop nest:\n"
-          << sch->GetLoops(block_id)[0];
-  MergeDiscreteFlattenAxis(sch, block_id);
-  VLOG(6) << "After MergeDiscreteFlattenAxis on block: [" << block_id
-          << "], loop nest:\n"
-          << sch->GetLoops(block_id)[0];
-  SplitSptialInner(sch, block_id);
-  VLOG(6) << "After SplitSptialInner on block: [" << block_id
-          << "], loop nest:\n"
-          << sch->GetLoops(block_id)[0];
-  SplitReduceInner(sch, block_id);
-  VLOG(6) << "After SplitReduceInner on block: [" << block_id
-          << "], loop nest:\n"
-          << sch->GetLoops(block_id)[0];
-  BindCudaInfo(sch, block_id);
-  VLOG(6) << "After BindCudaInfo on block: [" << block_id << "], loop nest:\n"
-          << sch->GetLoops(block_id)[0];
-  VariableTypeAssignment(sch, block_id);
-  VLOG(6) << "After VariableTypeAssignment on block: [" << block_id
-          << "], loop nest:\n"
-          << sch->GetLoops(block_id)[0];
-  SetDiscreteReduceType(sch, block_id);
 }
 
-void TileFirstGeneralTactic::ApplyContinuousDataTile(
+void TileFirstGeneralTactic::ApplyContinuousReduce(
     ir::IRSchedule* sch, const std::string& block_id) {
   const auto sp_thread = context_->config.tile_config.warp_num * 32 /
                          context_->config.tile_config.tree_reduce_num;
@@ -172,17 +224,15 @@ void TileFirstGeneralTactic::ApplyContinuousDataTile(
   VLOG(4) << "ApplyContinuousDataTile vec_reduce_axis: "
           << utils::Join(vec_reduce_axis_, ", ");
 
-  // Merge reduce axes
   MergeReduceAxis(sch, block_id);
   VLOG(4) << "After MergeReduceAxis on block: [" << block_id
           << "], loop nest:\n"
-          << sch->GetModule().GetExprs().front();
+          << sch->GetLoops(block_id)[0];
 
-  // Merge spatial axes
   MergeFlattenAxis(sch, block_id);
   VLOG(4) << "After MergeFlattenAxis on block: [" << block_id
           << "], loop nest:\n"
-          << sch->GetModule().GetExprs().front();
+          << sch->GetLoops(block_id)[0];
 
   // Split spatial axes -> [sp_block, sp_loop, sp_thread]
   int current_reduce_axis = 0;
@@ -202,35 +252,30 @@ void TileFirstGeneralTactic::ApplyContinuousDataTile(
     }
   }
   VLOG(4) << "After SplitSptial on block: [" << block_id << "], loop nest:\n"
-          << sch->GetModule().GetExprs().front();
+          << sch->GetLoops(block_id)[0];
 
   // Split reduce axes -> [rd_loop, rd_thread]
   if (vec_reduce_axis_.size() > 0) {
     auto loops = sch->GetLoops(block_id);
+    auto reduce_loop = loops[current_reduce_axis].As<ir::For>();
     // [S..S, R] => [S..S, R(-1), R(thread)]
     sch->Split(loops[current_reduce_axis], {-1, rd_thread});
-    VLOG(4) << "Before ReorderReduction on block: [" << block_id
-            << "], loop nest:\n"
-            << sch->GetModule().GetExprs().front();
 
+    // TODO(lshpku): the Reorder is unneeded if the later FactorizeReduction
+    // supports rf_axis=1.
     loops = sch->GetLoops(block_id);
     // [S..S, R(-1), R(thread)] => [S..S, R(thread), R(-1)]
     sch->Reorder({loops[current_reduce_axis + 1], loops[current_reduce_axis]});
-    VLOG(4) << "Before FactorizeReduction on block: [" << block_id
-            << "], loop nest:\n"
-            << sch->GetModule().GetExprs().front();
 
-    if (IsReductionSBlock(sch->GetBlock(block_id))) {
+    if (IsReduceBlock(context_->config, block_id)) {
       loops = sch->GetLoops(block_id);
-      ir::Expr rf_tensor =
-          sch->FactorizeReduction(loops[current_reduce_axis],
-                                  /* rf_axis = */ 0,
-                                  /* with_write_back_block_init = */ false);
-      map_rf_block_[block_id] = rf_tensor.as_tensor_ref()->name;
+      sch->FactorizeReduction(loops[current_reduce_axis],
+                              /* rf_axis = */ 0,
+                              /* with_write_back_block_init = */ false);
     }
   }
   VLOG(4) << "After SplitReduce on block: [" << block_id << "], loop nest:\n"
-          << sch->GetModule().GetExprs().front();
+          << sch->GetLoops(block_id)[0];
 
   // Bind CUDA info
   const auto DoBind = [&](const std::vector<ir::Expr>& loops) {
@@ -255,14 +300,126 @@ void TileFirstGeneralTactic::ApplyContinuousDataTile(
     }
   };
   DoBind(sch->GetLoops(block_id));
-  if (map_rf_block_.count(block_id) > 0) {
-    DoBind(sch->GetLoops(map_rf_block_[block_id]));
+  if (IsReduceBlock(context_->config, block_id) &&
+      sch->HasBlock(block_id + "_rf")) {
+    DoBind(sch->GetLoops(block_id + "_rf"));
   }
   VLOG(4) << "After BindCudaInfo on block: [" << block_id << "], loop nest:\n"
-          << sch->GetModule().GetExprs().front();
+          << sch->GetLoops(block_id)[0];
 
   VariableTypeAssignment(sch, block_id);
   SetReduceType(sch, block_id);
+}
+
+void TileFirstGeneralTactic::ApplyDiscreteReduce(ir::IRSchedule* sch,
+                                                 const std::string& block_id) {
+  MergeReduceAxis(sch, block_id);
+  VLOG(4) << "After MergeReduceAxis on block: [" << block_id
+          << "], loop nest:\n"
+          << sch->GetLoops(block_id)[0];
+  MergeDiscreteFlattenAxis(sch, block_id);
+  VLOG(4) << "After MergeDiscreteFlattenAxis on block: [" << block_id
+          << "], loop nest:\n"
+          << sch->GetLoops(block_id)[0];
+  SplitSptialInner(sch, block_id);
+  VLOG(4) << "After SplitSptialInner on block: [" << block_id
+          << "], loop nest:\n"
+          << sch->GetLoops(block_id)[0];
+  SplitReduceInner(sch, block_id);
+  VLOG(4) << "After SplitReduceInner on block: [" << block_id
+          << "], loop nest:\n"
+          << sch->GetLoops(block_id)[0];
+  BindCudaInfo(sch, block_id);
+  VLOG(4) << "After BindCudaInfo on block: [" << block_id << "], loop nest:\n"
+          << sch->GetLoops(block_id)[0];
+  VariableTypeAssignment(sch, block_id);
+  VLOG(4) << "After VariableTypeAssignment on block: [" << block_id
+          << "], loop nest:\n"
+          << sch->GetLoops(block_id)[0];
+  SetDiscreteReduceType(sch, block_id);
+}
+
+void TileFirstGeneralTactic::ApplyIntervalReduce(ir::IRSchedule* sch,
+                                                 const std::string& block_id) {
+  const int64_t sp_thread = context_->config.tile_config.warp_num * 32 /
+                            context_->config.tile_config.tree_reduce_num;
+  const int64_t sp_loop = context_->config.tile_config.spatial_inner_num;
+  const int64_t rd_thread = context_->config.tile_config.tree_reduce_num;
+  const int64_t tx = lower_reduce_extend_;
+  const int64_t ty = std::max(32 / tx, sp_thread);
+  const int64_t tz = sp_thread * rd_thread / (tx * ty);
+  VLOG(4) << "ApplyIntervalReduce tx=" << tx << " ty=" << ty << " tz=" << tz;
+
+  MergeReduceAxis(sch, block_id);
+  VLOG(4) << "After MergeReduceAxis on block: [" << block_id
+          << "], loop nest:\n"
+          << sch->GetLoops(block_id)[0];
+
+  MergeFlattenAxis(sch, block_id);
+  VLOG(4) << "After MergeFlattenAxis on block: [" << block_id
+          << "], loop nest:\n"
+          << sch->GetLoops(block_id)[0];
+
+  // Split spatial axes -> [sp_block, sp_loop, ty]
+  int current_reduce_axis = 0;
+  if (vec_flatten_axis_.size() > 0) {
+    auto loops = sch->GetLoops(block_id);
+    if (sp_loop > 1 && ty > 1) {
+      sch->Split(loops[0], {-1, sp_loop, ty});
+      current_reduce_axis = 3;
+    } else if (sp_loop > 1 || ty > 1) {
+      sch->Split(loops[0], {-1, sp_loop > 1 ? sp_loop : ty});
+      current_reduce_axis = 2;
+    } else {
+      current_reduce_axis = 1;
+    }
+  }
+  VLOG(4) << "After SplitSptial on block: [" << block_id << "], loop nest:\n"
+          << sch->GetLoops(block_id)[0];
+
+  // Split reduce axes -> [rd_loop, tz, tx]
+  {
+    auto loops = sch->GetLoops(block_id);
+    auto reduce_loop = loops[current_reduce_axis].As<ir::For>();
+    sch->Split(loops[current_reduce_axis], {-1, tz * tx});
+
+    loops = sch->GetLoops(block_id);
+    sch->Reorder({loops[current_reduce_axis + 1], loops[current_reduce_axis]});
+
+    if (IsReduceBlock(context_->config, block_id)) {
+      loops = sch->GetLoops(block_id);
+      sch->FactorizeReduction(loops[current_reduce_axis],
+                              /* rf_axis = */ 0,
+                              /* with_write_back_block_init = */ false);
+      loops = sch->GetLoops(block_id + "_rf");
+      sch->Split(loops[current_reduce_axis], {tz, tx});
+    }
+
+    loops = sch->GetLoops(block_id);
+    sch->Split(loops[current_reduce_axis], {tz, tx});
+  }
+  VLOG(4) << "After SplitReduce on block: [" << block_id << "], loop nest:\n"
+          << sch->GetLoops(block_id)[0];
+
+  // Bind CUDA info
+  const auto DoBind = [&](const std::vector<ir::Expr>& loops) {
+    sch->Bind(loops[0], "blockIdx.x");
+    if (!vec_flatten_axis_.empty() && ty > 1) {
+      sch->Bind(loops[current_reduce_axis - 1], "threadIdx.y");
+    }
+    sch->Bind(loops[current_reduce_axis], "threadIdx.z");
+    sch->Bind(loops[current_reduce_axis + 1], "threadIdx.x");
+  };
+  DoBind(sch->GetLoops(block_id));
+  if (IsReduceBlock(context_->config, block_id) &&
+      sch->HasBlock(block_id + "_rf")) {
+    DoBind(sch->GetLoops(block_id + "_rf"));
+  }
+  VLOG(4) << "After BindCudaInfo on block: [" << block_id << "], loop nest:\n"
+          << sch->GetLoops(block_id)[0];
+
+  VariableTypeAssignment(sch, block_id);
+  SetIntervalReduceType(sch, block_id);
 }
 
 void TileFirstGeneralTactic::AlignToReduceInput(ir::IRSchedule* sch,
@@ -272,28 +429,11 @@ void TileFirstGeneralTactic::AlignToReduceInput(ir::IRSchedule* sch,
     return;
   }
 
-  std::vector<ir::Expr> loops = sch->GetLoops(block_id);
-  std::vector<int64_t> loop_perm(loops.size());
-  std::iota(loop_perm.begin(), loop_perm.end(), 0);
-
-  const auto IsReduce = [&](int64_t axis) {
-    auto& reduce_axis = context_->config.base_info->reduce_axis;
-    return std::find(reduce_axis.begin(), reduce_axis.end(), axis) !=
-           reduce_axis.end();
-  };
-
-  std::sort(loop_perm.begin(), loop_perm.end(), [&](int64_t a, int64_t b) {
-    if (IsReduce(a) == IsReduce(b)) {
-      return loop_strides[a] > loop_strides[b];
-    }
-    return IsReduce(b);
-  });
-  VLOG(4) << "loop_perm: " << utils::Join(loop_perm, ", ");
-
   // Reorder S/R loops seperately, otherwise reduce_init will be de-inlined.
+  std::vector<ir::Expr> loops = sch->GetLoops(block_id);
   std::vector<Expr> sp_loops, rd_loops;
-  for (auto i : loop_perm) {
-    if (IsReduce(i)) {
+  for (auto i : loop_perm_) {
+    if (vec_is_reduce_[i]) {
       rd_loops.push_back(loops[i]);
     } else if (loop_strides[i] != 0) {
       sp_loops.push_back(loops[i]);
@@ -363,19 +503,18 @@ void TileFirstGeneralTactic::SplitReduceInner(ir::IRSchedule* sch,
   sch->Split(loops[2], std::vector<int>{16, -1});
 
   loops = sch->GetLoops(block_id);
-  if (IsReductionSBlock(sch->GetBlock(block_id))) {
-    ir::Expr rf_tensor =
-        sch->FactorizeReduction(loops[2],
-                                0,
-                                /* with_write_back_block_init = */ false);
-    map_rf_block_[block_id] = rf_tensor.as_tensor_ref()->name;
+  if (IsReduceBlock(context_->config, block_id)) {
+    sch->FactorizeReduction(loops[2],
+                            0,
+                            /* with_write_back_block_init = */ false);
   }
 }
 
 void TileFirstGeneralTactic::VariableTypeAssignment(
     ir::IRSchedule* sch, const std::string& block_id) {
   const auto IsOutputTensor = [&](const std::string& tensor_name) -> bool {
-    return context_->output_names.count(tensor_name) > 0;
+    return context_->config.base_info->direct_output_var_names.count(
+               tensor_name) > 0;
   };
   const auto HasConsumers = [&](const ir::Expr& block) -> bool {
     return !ir::analyzer::GetConsumerSBlocks(block, sch->GetRootBlock(block))
@@ -387,15 +526,16 @@ void TileFirstGeneralTactic::VariableTypeAssignment(
     sch->SetBuffer(block, "local", false);
   }
 
-  if (map_rf_block_.count(block_id) > 0) {
-    auto block = sch->GetBlock(map_rf_block_[block_id]);
+  if (IsReduceBlock(context_->config, block_id) &&
+      sch->HasBlock(block_id + "_rf")) {
+    auto block = sch->GetBlock(block_id + "_rf");
     sch->SetBuffer(block, "local", false);
   }
 }
 
 void TileFirstGeneralTactic::SetReduceType(ir::IRSchedule* sch,
                                            const std::string& block_id) {
-  if (IsReductionSBlock(sch->GetBlock(block_id))) {
+  if (IsReduceBlock(context_->config, block_id)) {
     auto block = sch->GetBlock(block_id)
                      .As<ir::ScheduleBlockRealize>()
                      ->schedule_block.As<ir::ScheduleBlock>();
@@ -405,11 +545,21 @@ void TileFirstGeneralTactic::SetReduceType(ir::IRSchedule* sch,
 
 void TileFirstGeneralTactic::SetDiscreteReduceType(
     ir::IRSchedule* sch, const std::string& block_id) {
-  if (IsReductionSBlock(sch->GetBlock(block_id))) {
+  if (IsReduceBlock(context_->config, block_id)) {
     auto block = sch->GetBlock(block_id)
                      .As<ir::ScheduleBlockRealize>()
                      ->schedule_block.As<ir::ScheduleBlock>();
     block->reduce_method = cinn::ir::DiscreteReduceMethod();
+  }
+}
+
+void TileFirstGeneralTactic::SetIntervalReduceType(
+    ir::IRSchedule* sch, const std::string& block_id) {
+  if (IsReduceBlock(context_->config, block_id)) {
+    auto block = sch->GetBlock(block_id)
+                     .As<ir::ScheduleBlockRealize>()
+                     ->schedule_block.As<ir::ScheduleBlock>();
+    block->reduce_method = cinn::ir::IntervalReduceMethod();
   }
 }
 
@@ -427,8 +577,10 @@ void TileFirstGeneralTactic::BindCudaInfo(ir::IRSchedule* sch,
 
   DoBind(sch->GetLoops(block_id));
 
-  if (map_rf_block_.count(block_id) > 0) {
-    DoBind(sch->GetLoops(map_rf_block_[block_id]));
+  if (IsReduceBlock(context_->config, block_id) &&
+      sch->HasBlock(block_id + "_rf")) {
+    auto loops = sch->GetLoops(block_id + "_rf");
+    DoBind(sch->GetLoops(block_id + "_rf"));
   }
 }
 

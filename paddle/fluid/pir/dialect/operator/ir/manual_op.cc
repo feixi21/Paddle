@@ -861,8 +861,7 @@ std::vector<pir::Type> FusedGemmEpilogueOp::InferMeta(
       trans_y,
       activation,
       &meta_out,
-      activation == "none" ? nullptr : &meta_reserve_space,
-      phi::MetaConfig(false, false));
+      activation == "none" ? nullptr : &meta_reserve_space);
 
   std::vector<pir::Type> argument_outputs;
   pir::Type out_dense_tensor_type = paddle::dialect::DenseTensorType::get(
@@ -886,12 +885,6 @@ std::vector<pir::Type> FusedGemmEpilogueOp::InferMeta(
                 dense_reserve_space.offset());
   argument_outputs.push_back(reserve_space_dense_tensor_type);
   return argument_outputs;
-}
-
-bool FusedGemmEpilogueOp::InferSymbolicShape(
-    pir::InferSymbolicShapeContext *infer_context) {
-  return FusedGemmEpilogueOpInferSymbolicShape(this->operation(),
-                                               infer_context);
 }
 
 const char *FusedGemmEpilogueGradOp::attributes_name[3] = {  // NOLINT
@@ -2099,8 +2092,8 @@ std::vector<pir::Type> ArrayWrite_Op::InferMeta(
       x_type.offset());
   paddle::dialect::IrMetaTensor meta_x(&dense_x);
 
-  paddle::dialect::IrTensor dense_array_out;
-  paddle::dialect::IrMetaTensor meta_out(&dense_array_out);
+  paddle::dialect::IrTensor dense_out;
+  paddle::dialect::IrMetaTensor meta_out(&dense_out);
 
   phi::ArrayWriteInferMeta(
       meta_array, meta_x, &meta_out, phi::MetaConfig(false, false));
@@ -2108,24 +2101,24 @@ std::vector<pir::Type> ArrayWrite_Op::InferMeta(
   std::vector<pir::Type> argument_outputs;
   pir::Type out_type = paddle::dialect::DenseTensorArrayType::get(
       pir::IrContext::Instance(),
-      paddle::dialect::TransToIrDataType(dense_array_out.dtype()),
+      paddle::dialect::TransToIrDataType(dense_array.dtype()),
       x_type.dims(),
-      dense_array_out.layout());
+      dense_array.layout());
   // update array's dims as x's dims.
   // TOOD(chenxi67) Do not change if dim is set by custom
   if (array_.type().isa<paddle::dialect::AllocatedDenseTensorArrayType>()) {
     array_.set_type(paddle::dialect::AllocatedDenseTensorArrayType::get(
         pir::IrContext::Instance(),
         place,
-        paddle::dialect::TransToIrDataType(dense_array_out.dtype()),
+        array_type.dtype(),
         x_type.dims(),
-        dense_array_out.layout()));
+        array_type.data_layout()));
   } else if (array_.type().isa<paddle::dialect::DenseTensorArrayType>()) {
-    array_.set_type(paddle::dialect::DenseTensorArrayType::get(
-        pir::IrContext::Instance(),
-        paddle::dialect::TransToIrDataType(dense_array_out.dtype()),
-        x_type.dims(),
-        dense_array_out.layout()));
+    array_.set_type(
+        paddle::dialect::DenseTensorArrayType::get(pir::IrContext::Instance(),
+                                                   array_type.dtype(),
+                                                   x_type.dims(),
+                                                   array_type.data_layout()));
   }
 
   argument_outputs.push_back(out_type);
@@ -3780,8 +3773,7 @@ bool IncrementOp::InferSymbolicShape(
     pir::InferSymbolicShapeContext *infer_context) {
   const symbol::ShapeOrDataDimExprs &operand_shape_or_data =
       infer_context->GetShapeOrDataForValue(x());
-  infer_context->SetShapeOrDataForValue(
-      out(), symbol::TensorShapeOrDataDimExprs{operand_shape_or_data.shape()});
+  infer_context->SetShapeOrDataForValue(out(), operand_shape_or_data);
   return true;
 }
 
@@ -3986,8 +3978,7 @@ bool Increment_Op::InferSymbolicShape(
     pir::InferSymbolicShapeContext *infer_context) {
   const symbol::ShapeOrDataDimExprs &operand_shape_or_data =
       infer_context->GetShapeOrDataForValue(x());
-  infer_context->SetShapeOrDataForValue(
-      out(), symbol::TensorShapeOrDataDimExprs{operand_shape_or_data.shape()});
+  infer_context->SetShapeOrDataForValue(out(), operand_shape_or_data);
   return true;
 }
 

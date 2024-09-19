@@ -573,10 +573,6 @@ int GenericPlugin::enqueue(const nvinfer1::PluginTensorDesc* input_desc,
         (data_type == nvinfer1::DataType::kHALF));
 
   phi_kernel_contexts_[data_type]->ClearInputOutput();
-
-  auto* dev_ctx = static_cast<phi::GPUContext*>(pool.Get(place));
-  phi_kernel_contexts_[data_type]->SetDeviceContext(dev_ctx);
-
   auto& vec_kernel_fn_tensor_params = op_yaml_info_->TensorParams(true);
   int kernel_input_count = vec_kernel_fn_tensor_params.size();
   for (int i = 0; i < getNbInputs(); i++) {
@@ -618,7 +614,7 @@ int GenericPlugin::enqueue(const nvinfer1::PluginTensorDesc* input_desc,
       tensor_attr_count++;
       PADDLE_ENFORCE_LE(tensor_attr_count + kernel_input_count,
                         getNbInputs(),
-                        common::errors::OutOfRange(
+                        phi::errors::OutOfRange(
                             "The set input tensor number is %d, but got %d "
                             "that is greater than set input tensor num.",
                             getNbInputs(),
@@ -634,7 +630,7 @@ int GenericPlugin::enqueue(const nvinfer1::PluginTensorDesc* input_desc,
               phi::TensorRef(&((*dense_tensor_inputs_)[tensor_index]));
           phi_kernel_contexts_[data_type]->EmplaceBackAttr(attr);
         } else {
-          PADDLE_THROW(common::errors::Unimplemented(
+          PADDLE_THROW(phi::errors::Unimplemented(
               " [%s] only support dense tensor ", tensor_attr_type));
         }
       } else if (tensor_attr_type == "paddle::dialect::ScalarAttribute") {
@@ -643,8 +639,8 @@ int GenericPlugin::enqueue(const nvinfer1::PluginTensorDesc* input_desc,
 
         phi_kernel_contexts_[data_type]->EmplaceBackAttr(attr);
       } else {
-        PADDLE_THROW(common::errors::Unimplemented(
-            "attr type not support [%s] ", tensor_attr_type));
+        PADDLE_THROW(phi::errors::Unimplemented("attr type not support [%s] ",
+                                                tensor_attr_type));
       }
 
       continue;
@@ -653,9 +649,9 @@ int GenericPlugin::enqueue(const nvinfer1::PluginTensorDesc* input_desc,
     PADDLE_ENFORCE_NE(
         attrs_map_.find(t),
         attrs_map_.end(),
-        common::errors::NotFound("Not found %s in attrs_map_, please check "
-                                 "attrs_map_info when construct GenericPlugin.",
-                                 t));
+        phi::errors::NotFound("Not found %s in attrs_map_, please check "
+                              "attrs_map_info when construct GenericPlugin.",
+                              t));
     auto& attr_type_name = op_yaml_info_->AttrTypeName(t);
     if (attr_type_name == "paddle::dialect::IntArrayAttribute") {
       phi_kernel_contexts_[data_type]->EmplaceBackAttr(
@@ -690,7 +686,7 @@ int GenericPlugin::enqueue(const nvinfer1::PluginTensorDesc* input_desc,
         PADDLE_ENFORCE_EQ(
             array_list[0].isa<paddle::dialect::ScalarAttribute>(),
             true,
-            common::errors::Unimplemented(
+            phi::errors::Unimplemented(
                 "the 0th elementwise MUST be dialect::ScalarAttribute"));
         for (size_t i = 0; i < array_list.size(); ++i) {
           vec_res.push_back(array_list[i]
@@ -707,7 +703,7 @@ int GenericPlugin::enqueue(const nvinfer1::PluginTensorDesc* input_desc,
         PADDLE_ENFORCE_EQ(
             array_list[0].isa<::pir::Int32Attribute>(),
             true,
-            common::errors::Unimplemented(
+            phi::errors::Unimplemented(
                 "the 0th elementwise MUST be ::pir::Int32Attribute"));
         for (size_t i = 0; i < array_list.size(); ++i) {
           vec_res.push_back(
@@ -727,8 +723,8 @@ int GenericPlugin::enqueue(const nvinfer1::PluginTensorDesc* input_desc,
           }
 
         } else {
-          PADDLE_THROW(common::errors::Unimplemented(
-              "attr type not support [%s] ", attr_type_name));
+          PADDLE_THROW(phi::errors::Unimplemented("attr type not support [%s] ",
+                                                  attr_type_name));
         }
       }
       phi_kernel_contexts_[data_type]->EmplaceBackAttr(vec_res);
@@ -741,7 +737,7 @@ int GenericPlugin::enqueue(const nvinfer1::PluginTensorDesc* input_desc,
         PADDLE_ENFORCE_EQ(
             array_list[0].isa<::pir::Int64Attribute>(),
             true,
-            common::errors::PreconditionNotMet(
+            phi::errors::PreconditionNotMet(
                 "Element in array list MUST be ::pir::Int64Attribute "));
 
         for (size_t i = 0; i < array_list.size(); ++i) {
@@ -759,7 +755,7 @@ int GenericPlugin::enqueue(const nvinfer1::PluginTensorDesc* input_desc,
         PADDLE_ENFORCE_EQ(
             array_list[0].isa<::pir::Int64Attribute>(),
             true,
-            common::errors::PreconditionNotMet(
+            phi::errors::PreconditionNotMet(
                 "Element in array list MUST be ::pir::Int64Attribute "));
 
         for (size_t i = 0; i < array_list.size(); ++i) {
@@ -778,7 +774,7 @@ int GenericPlugin::enqueue(const nvinfer1::PluginTensorDesc* input_desc,
         PADDLE_ENFORCE_EQ(
             array_list[0].isa<::pir::StrAttribute>(),
             true,
-            common::errors::PreconditionNotMet(
+            phi::errors::PreconditionNotMet(
                 "Element in array list MUST be ::pir::StrAttribute "));
 
         for (size_t i = 0; i < array_list.size(); ++i) {
@@ -795,8 +791,8 @@ int GenericPlugin::enqueue(const nvinfer1::PluginTensorDesc* input_desc,
       phi_kernel_contexts_[data_type]->EmplaceBackAttr(
           attrs_map_[t].dyn_cast<paddle::dialect::ScalarAttribute>().data());
     } else {
-      PADDLE_THROW(common::errors::Unimplemented("attr type not support [%s] ",
-                                                 attr_type_name));
+      PADDLE_THROW(phi::errors::Unimplemented("attr type not support [%s] ",
+                                              attr_type_name));
     }
     VLOG(6) << "ctx->EmplaceBackAttr: " << t;
   }

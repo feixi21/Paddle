@@ -11,9 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
 
 import paddle
 from paddle.base import framework, unique_name
@@ -23,12 +20,6 @@ from paddle.base.layer_helper import LayerHelper
 from paddle.framework import in_pir_mode
 from paddle.optimizer import Optimizer
 from paddle.pir.core import create_parameter
-
-if TYPE_CHECKING:
-    from paddle import Tensor
-    from paddle.base.framework import Operator
-    from paddle.static import Program
-
 
 __all__ = []
 
@@ -121,21 +112,9 @@ class LookAhead(Optimizer):
 
     """
 
-    inner_optimizer: Optimizer
-    alpha: float
-    k: int
-    type: str
-    helper: LayerHelper
-
     _slow_str = "slow"
 
-    def __init__(
-        self,
-        inner_optimizer: Optimizer,
-        alpha: float = 0.5,
-        k: int = 5,
-        name: str | None = None,
-    ) -> None:
+    def __init__(self, inner_optimizer, alpha=0.5, k=5, name=None):
         assert inner_optimizer is not None, "inner optimizer can not be None"
         assert (
             0.0 <= alpha <= 1.0
@@ -173,7 +152,7 @@ class LookAhead(Optimizer):
 
     @framework.dygraph_only
     @imperative_base.no_grad
-    def step(self) -> None:
+    def step(self):
         """
         Execute the optimizer and update parameters once.
 
@@ -293,12 +272,8 @@ class LookAhead(Optimizer):
 
     @imperative_base.no_grad
     def minimize(
-        self,
-        loss: Tensor,
-        startup_program: Program | None = None,
-        parameters: list[Tensor] | list[str] | None = None,
-        no_grad_set: set[Tensor] | set[str] | None = None,
-    ) -> tuple[list[Operator], list[tuple[Tensor, Tensor]]]:
+        self, loss, startup_program=None, parameters=None, no_grad_set=None
+    ):
         """
         Add operations to minimize ``loss`` by updating ``parameters``.
 

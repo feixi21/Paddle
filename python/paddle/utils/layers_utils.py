@@ -43,12 +43,6 @@ _T = TypeVar("_T")
 _U = TypeVar("_U")
 
 
-class NotSupportedTensorArgumentError(TypeError):
-    def __init__(self, msg, name: str):
-        super().__init__(msg)
-        self.name = name
-
-
 def convert_to_list(value, n, name, dtype=int):
     """
     Converts a single numerical type or iterable of numerical
@@ -70,7 +64,9 @@ def convert_to_list(value, n, name, dtype=int):
         passed.
     """
     if isinstance(value, dtype):
-        return [value] * n
+        return [
+            value,
+        ] * n
     else:
         try:
             value_list = list(value)
@@ -83,11 +79,9 @@ def convert_to_list(value, n, name, dtype=int):
                 f"The {name}'s length must be {n}. Received: {value}"
             )
         for single_value in value_list:
-            if isinstance(single_value, (Variable, paddle.pir.Value)):
-                raise NotSupportedTensorArgumentError(
-                    f"`{name}` required numerical type with `{dtype}`, but received Tensor.",
-                    name,
-                )
+            assert not isinstance(
+                single_value, (Variable, paddle.pir.Value)
+            ), f"Required numerical type with '{dtype}', but received Tensor."
             try:
                 dtype(single_value)
             except (ValueError, TypeError):

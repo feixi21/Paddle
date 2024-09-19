@@ -226,10 +226,7 @@ std::future<int32_t> FleetWrapper::PullSparseVarsAsync(
       continue;
     }
     phi::DenseTensor* tensor = var->GetMutable<phi::DenseTensor>();
-    PADDLE_ENFORCE_NOT_NULL(
-        tensor,
-        common::errors::InvalidArgument(
-            "Tensor of var %s is null. It must not be null.", name));
+    CHECK(tensor != nullptr) << "tensor of var " << name << " is null";
     int64_t* ids = tensor->data<int64_t>();
     size_t len = tensor->numel();
     for (auto i = 0u; i < len; ++i) {
@@ -276,10 +273,7 @@ void FleetWrapper::PullSparseVarsSync(
       continue;
     }
     phi::DenseTensor* tensor = var->GetMutable<phi::DenseTensor>();
-    PADDLE_ENFORCE_NOT_NULL(
-        tensor,
-        common::errors::InvalidArgument(
-            "Tensor of var %s is null. It must not be null.", name));
+    CHECK(tensor != nullptr) << "tensor of var " << name << " is null";
     int64_t* ids = tensor->data<int64_t>();
     size_t len = tensor->numel();
 
@@ -350,28 +344,13 @@ void FleetWrapper::PullSparseToTensorSync(
     for (size_t i = 0; i < len; ++i, output_len += fea_dim) {
       if (!output || output_len == size_t(output->numel())) {
         ++output_index;
-        PADDLE_ENFORCE_LT(
-            output_index,
-            outputs->size(),
-            common::errors::InvalidArgument(
-                "The output_index (%d) is out of bounds for outputs size (%d).",
-                output_index,
-                outputs->size()));
+        CHECK(output_index < outputs->size());  // NOLINT
         output = outputs->at(output_index);
         output->set_lod(tensor->lod());
         output_data = output->mutable_data<float>(place);
         output_len = 0;
-        PADDLE_ENFORCE_EQ(output->numel() % fea_dim,
-                          0,
-                          common::errors::InvalidArgument(
-                              "The total number of elements (%d) is not "
-                              "divisible by feature dimension (%d).",
-                              output->numel(),
-                              fea_dim));
-        PADDLE_ENFORCE_NOT_NULL(
-            output_data,
-            common::errors::InvalidArgument(
-                "output_data is null. It must not be null."));
+        CHECK(output->numel() % fea_dim == 0);  // NOLINT
+        CHECK(output_data != nullptr);          // NOLINT
       }
       uint64_t real_id = static_cast<uint64_t>(ids[i]);
       if (real_id == padding_id) {
@@ -451,8 +430,7 @@ void FleetWrapper::PushDenseParamSync(
   std::vector<::paddle::distributed::Region> regions;
   for (auto& t : var_names) {
     Variable* var = scope.FindVar(t);
-    PADDLE_ENFORCE_NOT_NULL(
-        var, common::errors::InvalidArgument("var[%s] not found", t));
+    CHECK(var != nullptr) << "var[" << t << "] not found";
     phi::DenseTensor* tensor = var->GetMutable<phi::DenseTensor>();
     if (!phi::is_gpu_place(tensor->place())) {
       float* g = tensor->mutable_data<float>(place);
@@ -464,10 +442,7 @@ void FleetWrapper::PushDenseParamSync(
       worker_ptr_->PushDenseParam(regions.data(), regions.size(), table_id);
   push_status.wait();
   auto status = push_status.get();
-  PADDLE_ENFORCE_EQ(status,
-                    0,
-                    common::errors::InvalidArgument(
-                        "push dense param failed, status[%d]", status));
+  CHECK(status == 0) << "push dense param failed, status[" << status << "]";
 }
 
 void FleetWrapper::PushDenseVarsSync(
@@ -486,8 +461,7 @@ void FleetWrapper::PushDenseVarsAsync(
   std::vector<::paddle::distributed::Region> regions;
   for (auto& t : var_names) {
     Variable* var = scope.FindVar(t);
-    PADDLE_ENFORCE_NOT_NULL(
-        var, common::errors::InvalidArgument("var[%s] not found", t));
+    CHECK(var != nullptr) << "var[" << t << "] not found";
     phi::DenseTensor* tensor = var->GetMutable<phi::DenseTensor>();
     int count = tensor->numel();
     float* g = tensor->mutable_data<float>(place);
@@ -581,13 +555,7 @@ void FleetWrapper::PushSparseFromTensorAsync(
     const phi::DenseTensor* clks,
     std::vector<phi::DenseTensor*>* outputs,
     bool use_cvm_op) {
-  PADDLE_ENFORCE_EQ(slots.size(),
-                    inputs->size(),
-                    common::errors::InvalidArgument(
-                        "The size of slots and inputs must be the same. "
-                        "Got slots.size() = %d, inputs->size() = %d.",
-                        slots.size(),
-                        inputs->size()));
+  CHECK(slots.size() == inputs->size());
   int batch_size = -1;
   bool batch_size_consist = true;
   for (auto* input : *inputs) {
@@ -601,38 +569,16 @@ void FleetWrapper::PushSparseFromTensorAsync(
       break;
     }
   }
-  PADDLE_ENFORCE_GT(batch_size,
-                    0,
-                    common::errors::InvalidArgument(
-                        "The batch size must be greater than 0."));
+  CHECK(batch_size > 0);  // NOLINT
 
   size_t show_size =
       !shows->lod().empty() ? shows->lod()[0].size() - 1 : shows->dims()[0];
-  if (show_size != size_t(batch_size))
-    PADDLE_ENFORCE_EQ(show_size,
-                      1,
-                      common::errors::InvalidArgument(
-                          "The show_size must be either equal to the "
-                          "batch_size as size_t (%d) or equal to 1 (got %d).",
-                          batch_size,
-                          show_size));
+  CHECK(show_size == size_t(batch_size) || show_size == 1);
   size_t clk_size =
       !clks->lod().empty() ? clks->lod()[0].size() - 1 : clks->dims()[0];
-  if (show_size != size_t(batch_size))
-    PADDLE_ENFORCE_EQ(show_size,
-                      1,
-                      common::errors::InvalidArgument(
-                          "The show_size must be either equal to the "
-                          "batch_size as size_t (%d) or equal to 1 (got %d).",
-                          batch_size,
-                          show_size));
-  PADDLE_ENFORCE_EQ(outputs->size(),
-                    inputs->size(),
-                    common::errors::InvalidArgument(
-                        "The size of outputs and inputs must be the same. "
-                        "Got outputs->size() = %d, inputs->size() = %d.",
-                        outputs->size(),
-                        inputs->size()));
+  CHECK(clk_size == size_t(batch_size) || clk_size == 1);
+
+  CHECK(outputs->size() == inputs->size());
   std::vector<uint64_t> push_keys;
   push_keys.reserve(MAX_FEASIGN_NUM / 100);
   std::vector<std::vector<float>> push_values;
@@ -723,11 +669,7 @@ void FleetWrapper::PushSparseFromTensorAsync(
         ++input_idx;
       }
     }
-    PADDLE_ENFORCE_EQ(static_cast<int64_t>(output_len),
-                      g_tensor->numel(),
-                      common::errors::InvalidArgument(
-                          "The casted output length must equal the "
-                          "number of elements in the tensor."));
+    CHECK(static_cast<int64_t>(output_len) == g_tensor->numel());
   }
 
   std::vector<float*> push_g_vec(input_idx, nullptr);
@@ -838,8 +780,7 @@ void FleetWrapper::ShrinkDenseTable(int table_id,
   for (std::string& name : var_list) {
     if (name.find("batch_sum") != std::string::npos) {
       Variable* var = scope->FindVar(name);
-      PADDLE_ENFORCE_NOT_NULL(
-          var, common::errors::InvalidArgument("var batch_sum not found"));
+      CHECK(var != nullptr) << "var[" << name << "] not found";
       VLOG(3) << "prepare shrink dense batch_sum";
       phi::DenseTensor* tensor = var->GetMutable<phi::DenseTensor>();
       float* g = tensor->data<float>();
@@ -849,8 +790,7 @@ void FleetWrapper::ShrinkDenseTable(int table_id,
       size_name.replace(
           size_name.find("batch_sum"), size_name.length(), "batch_size");
       Variable* var_size = scope->FindVar(size_name);
-      PADDLE_ENFORCE_NOT_NULL(
-          var_size, common::errors::InvalidArgument("var batch_sum not found"));
+      CHECK(var_size != nullptr) << "var[" << size_name << "] not found";
       VLOG(3) << "shrink dense batch_sum: " << name << ", " << size_name;
       float* g_size = var_size->GetMutable<phi::DenseTensor>()->data<float>();
 
@@ -861,8 +801,7 @@ void FleetWrapper::ShrinkDenseTable(int table_id,
       regions.emplace_back(std::move(reg));
     } else {
       Variable* var = scope->FindVar(name);
-      PADDLE_ENFORCE_NOT_NULL(
-          var, common::errors::InvalidArgument("var batch_sum not found"));
+      CHECK(var != nullptr) << "var[" << name << "] not found";
       phi::DenseTensor* tensor = var->GetMutable<phi::DenseTensor>();
       float* g = tensor->data<float>();
       ::paddle::distributed::Region reg(g, tensor->numel());
@@ -990,7 +929,7 @@ std::default_random_engine& FleetWrapper::LocalRandomEngine() {
 size_t FleetWrapper::GetAbsoluteSum(size_t start,
                                     size_t end,
                                     size_t level,
-                                    const phi::LoD& lod) {
+                                    const framework::LoD& lod) {
   if (level >= lod.size() - 1) {
     return end - start;
   }

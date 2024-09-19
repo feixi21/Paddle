@@ -147,6 +147,9 @@ class PD_INFER_DECL PassStrategy : public PaddlePassBuilder {
   /// \brief Disable the use of OneDNN.
   virtual void DisableMKLDNN() {}
 
+  /// \brief Enable OneDNN quantize optimization.
+  virtual void EnableMkldnnQuantizer() {}
+
   /// \brief Enable OneDNN bfloat16.
   virtual void EnableMkldnnBfloat16() {}
 
@@ -199,6 +202,7 @@ class PD_INFER_DECL CpuPassStrategy : public PassStrategy {
       : PassStrategy(other.AllPasses()) {
     use_gpu_ = other.use_gpu_;
     use_mkldnn_ = other.use_mkldnn_;
+    use_mkldnn_quantizer_ = other.use_mkldnn_quantizer_;
     use_mkldnn_bfloat16_ = other.use_mkldnn_bfloat16_;
     use_mkldnn_int8_ = other.use_mkldnn_int8_;
     disable_mkldnn_fc_passes_ = other.disable_mkldnn_fc_passes_;
@@ -216,6 +220,9 @@ class PD_INFER_DECL CpuPassStrategy : public PassStrategy {
   /// \brief Disable the use of OneDNN.
   void DisableMKLDNN() override;
 
+  /// \brief Enable OneDNN quantize optimization.
+  void EnableMkldnnQuantizer() override;
+
   /// \brief Enable OneDNN bfloat16.
   void EnableMkldnnBfloat16() override;
 
@@ -230,6 +237,7 @@ class PD_INFER_DECL CpuPassStrategy : public PassStrategy {
   void EraseFcMkldnnPasses();
 
   /// \cond Protected
+  bool use_mkldnn_quantizer_{false};
   bool use_mkldnn_bfloat16_{false};
   bool use_mkldnn_int8_{false};
   bool disable_mkldnn_fc_passes_{false};
@@ -258,6 +266,9 @@ class PD_INFER_DECL GpuPassStrategy : public PassStrategy {
 
   /// \brief Not supported in GPU mode yet.
   void EnableMKLDNN() override;
+
+  /// \brief Not supported in GPU mode yet.
+  void EnableMkldnnQuantizer() override;
 
   /// \brief Not supported in GPU mode yet.
   void EnableMkldnnBfloat16() override;
@@ -340,6 +351,5 @@ PD_INFER_DECL extern const std::vector<std::string> kPirGpuPasses;
 PD_INFER_DECL extern const std::vector<std::string> kPirCpuPasses;
 PD_INFER_DECL extern const std::vector<std::string> kPirXpuPasses;
 PD_INFER_DECL extern const std::vector<std::string> kPirMkldnnPasses;
-PD_INFER_DECL extern const std::vector<std::string> kPirMkldnnBf16Passes;
 
 }  // namespace paddle

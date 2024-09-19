@@ -72,9 +72,6 @@ int32_t Table::Initialize(const TableParameter &config,
     LOG(WARNING) << "Table fs_client initialize failed";
     // return -1;
   }
-  _fs_name = fs_config.uri();
-  _fs_user = fs_config.user();
-  _pass_wd = fs_config.passwd();
   return Initialize();
 }
 

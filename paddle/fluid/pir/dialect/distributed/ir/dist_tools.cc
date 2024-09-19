@@ -377,9 +377,7 @@ pir::Attribute CreateReplicatedDistAttr(pir::Type prim_type,
   }
   return nullptr;
 }
-pir::Type CvtToPirDistType(pir::Type global_type,
-                           pir::Attribute dist_attr,
-                           const std::vector<int64_t>& local_ddim) {
+pir::Type CvtToPirDistType(pir::Type global_type, pir::Attribute dist_attr) {
   if (!global_type) return nullptr;
   auto ctx = pir::IrContext::Instance();
   if (auto dense_tensor_type = global_type.dyn_cast<pir::DenseTensorType>()) {
@@ -391,14 +389,7 @@ pir::Type CvtToPirDistType(pir::Type global_type,
           "Only allowed convert a densor tensor type to dist dense tensor type "
           "with non-empty TensorDistAttr"));
     }
-    if (!local_ddim.empty()) {
-      return DistDenseTensorType::get(ctx,
-                                      dense_tensor_type,
-                                      tensor_dist_attr,
-                                      common::make_ddim(local_ddim));
-    } else {
-      return DistDenseTensorType::get(ctx, dense_tensor_type, tensor_dist_attr);
-    }
+    return DistDenseTensorType::get(ctx, dense_tensor_type, tensor_dist_attr);
   } else if (auto vec_type = global_type.dyn_cast<pir::VectorType>()) {
     auto array_attr = dist_attr.dyn_cast<pir::ArrayAttribute>();
     if (!array_attr) {
@@ -415,8 +406,7 @@ pir::Type CvtToPirDistType(pir::Type global_type,
             "The vector type size must equal to array attribute size."));
     std::vector<pir::Type> dist_vec_type;
     for (size_t idx = 0; idx < vec_type.size(); ++idx) {
-      dist_vec_type.push_back(
-          CvtToPirDistType(vec_type[idx], array_attr[idx], local_ddim));
+      dist_vec_type.push_back(CvtToPirDistType(vec_type[idx], array_attr[idx]));
     }
     return pir::VectorType::get(ctx, dist_vec_type);
   } else {

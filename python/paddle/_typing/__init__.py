@@ -17,6 +17,7 @@ from .backport import EllipsisType as EllipsisType
 
 # Basic
 from .basic import (
+    IntSequence as IntSequence,
     NestedList as NestedList,
     NestedNumbericSequence as NestedNumbericSequence,
     NestedSequence as NestedSequence,

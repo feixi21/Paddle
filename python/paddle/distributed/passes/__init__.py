@@ -82,9 +82,8 @@ from .cpp_pass import (  # noqa: F401
     FuseOptimizerPass,
     FuseReluDepthwiseConvPass,
     FuseResUnitPass,
+    InplaceAddtoOpPass,
 )
-
-# InplaceAddtoOpPass,
 from .fuse_all_reduce import (  # noqa: F401
     FuseAllReducePass,
     filter_all_collective_op_indices,

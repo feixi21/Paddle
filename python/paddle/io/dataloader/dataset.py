@@ -65,7 +65,7 @@ class Dataset(Generic[_T]):
             >>> from paddle.io import Dataset
 
             >>> # define a random dataset
-            >>> class RandomDataset(Dataset):  # type: ignore[type-arg]
+            >>> class RandomDataset(Dataset):
             ...     def __init__(self, num_samples):
             ...         self.num_samples = num_samples
             ...
@@ -127,7 +127,7 @@ class IterableDataset(Dataset[_T]):
             >>> from paddle.io import IterableDataset
 
             >>> # define a random dataset
-            >>> class RandomDataset(IterableDataset): # type: ignore[type-arg]
+            >>> class RandomDataset(IterableDataset):
             ...     def __init__(self, num_samples):
             ...         self.num_samples = num_samples
             ...
@@ -159,7 +159,7 @@ class IterableDataset(Dataset[_T]):
             >>> import numpy as np
             >>> from paddle.io import IterableDataset, DataLoader, get_worker_info
 
-            >>> class SplitedIterableDataset(IterableDataset): # type: ignore[type-arg]
+            >>> class SplitedIterableDataset(IterableDataset):
             ...     def __init__(self, start, end):
             ...         self.start = start
             ...         self.end = end
@@ -214,7 +214,7 @@ class IterableDataset(Dataset[_T]):
             >>> import numpy as np
             >>> from paddle.io import IterableDataset, DataLoader, get_worker_info
 
-            >>> class RangeIterableDataset(IterableDataset): # type: ignore[type-arg]
+            >>> class RangeIterableDataset(IterableDataset):
             ...     def __init__(self, start, end):
             ...         self.start = start
             ...         self.end = end
@@ -228,7 +228,7 @@ class IterableDataset(Dataset[_T]):
             >>> def worker_init_fn(worker_id):
             ...     worker_info = get_worker_info()
             ...
-            ...     dataset: RangeIterableDataset = worker_info.dataset # type: ignore[assignment]
+            ...     dataset = worker_info.dataset
             ...     start = dataset.start
             ...     end = dataset.end
             ...     num_per_worker = int(
@@ -438,7 +438,7 @@ class ChainDataset(IterableDataset[Any]):
 
 
             >>> # define a random dataset
-            >>> class RandomDataset(IterableDataset):  # type: ignore[type-arg]
+            >>> class RandomDataset(IterableDataset):
             ...     def __init__(self, num_samples):
             ...         self.num_samples = num_samples
             ...
@@ -550,14 +550,14 @@ def random_split(
             2
 
             >>> # output of the first subset
-            >>> for idx, v in enumerate(a_list[0]):
+            >>> for idx, v in enumerate(a_list[0]):  # type: ignore[arg-type, var-annotated]
             ...     print(idx, v) # doctest: +SKIP("The output depends on the environment.")
             0 7
             1 6
             2 5
 
             >>> # output of the second subset
-            >>> for idx, v in enumerate(a_list[1]):
+            >>> for idx, v in enumerate(a_list[1]):  # type: ignore[arg-type, var-annotated]
             ...     print(idx, v) # doctest: +SKIP("The output depends on the environment.")
             0 1
             1 9

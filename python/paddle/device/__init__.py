@@ -266,12 +266,8 @@ def _convert_to_place(device: str) -> PlaceLike:
                     "The device must be a string which is like 'cpu', {}".format(
                         ', '.join(
                             f"'{x}', '{x}:x'"
-                            for x in [
-                                'gpu',
-                                'xpu',
-                                'npu',
-                                *core.get_all_custom_device_type(),
-                            ]
+                            for x in ['gpu', 'xpu', 'npu']
+                            + core.get_all_custom_device_type()
                         )
                     )
                 )
@@ -500,7 +496,7 @@ class Event:
         interprocess: bool = False,
     ) -> None:
         if device is None:
-            self.device = paddle.framework._current_expected_place_()
+            self.device = paddle.framework._current_expected_place()
         elif isinstance(device, str):
             self.device = paddle.device._convert_to_place(device)
         else:
@@ -604,7 +600,7 @@ class Event:
                 >>> e1.elapsed_time(e2)
 
         '''
-        return self.event_base.elapsed_time(end_event.event_base)
+        return 0
 
     def synchronize(self) -> None:
         '''
@@ -686,7 +682,7 @@ class Stream:
             return
 
         if device is None:
-            self.device = paddle.framework._current_expected_place_()
+            self.device = paddle.framework._current_expected_place()
         elif isinstance(device, str):
             self.device = paddle.device._convert_to_place(device)
         else:
@@ -885,7 +881,7 @@ def current_stream(device: PlaceLike | None = None) -> Stream:
 
     '''
     if device is None:
-        place = paddle.framework._current_expected_place_()
+        place = paddle.framework._current_expected_place()
     elif isinstance(device, str):
         place = paddle.device._convert_to_place(device)
     else:
@@ -996,7 +992,7 @@ class stream_guard:
 
         self.src_prev_stream = current_stream(cur_stream.device)
         if self.src_prev_stream.device != cur_stream.device:
-            self.tmp_place = paddle.base.framework._current_expected_place_()
+            self.tmp_place = paddle.base.framework._current_expected_place()
             paddle.base.framework._set_expected_place(cur_stream.device)
             self.dst_prev_stream = current_stream(cur_stream.device)
             set_stream(cur_stream)
@@ -1046,7 +1042,7 @@ def synchronize(device: PlaceLike | None = None) -> None:
     """
 
     if device is None:
-        place = paddle.framework._current_expected_place_()
+        place = paddle.framework._current_expected_place()
     elif isinstance(device, str):
         place = paddle.device._convert_to_place(device)
     else:

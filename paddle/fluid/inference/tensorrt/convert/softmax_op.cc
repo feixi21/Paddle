@@ -60,7 +60,8 @@ class SoftMaxOpConverter : public OpConverter {
     // support Nd.
     // Tips: Dynamic shape already fixes.
     int padded_dims = 0;
-    int explicit_batch = 1;
+    int explicit_batch = 0;
+    if (engine_->with_dynamic_shape()) explicit_batch = 1;
     for (int i = input_dims - 1; i > explicit_batch; i--) {
       if (input_shape.d[i] == 1) {
         padded_dims += 1;
@@ -68,10 +69,18 @@ class SoftMaxOpConverter : public OpConverter {
         break;
       }
     }
-    if (axis < 0) {
-      axes = input_dims + axis;
+    if (!engine_->with_dynamic_shape()) {
+      if (axis < 0) {
+        axes = input_dims + axis - padded_dims;
+      } else {
+        axes = axis - 1;
+      }
     } else {
-      axes = axis;
+      if (axis < 0) {
+        axes = input_dims + axis;
+      } else {
+        axes = axis;
+      }
     }
     layer->setAxes(1 << axes);
 

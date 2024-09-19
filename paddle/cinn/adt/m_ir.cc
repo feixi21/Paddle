@@ -175,11 +175,8 @@ std::unordered_map<Index, LoopIterators> GenerateAnchorIndex2LoopIterators(
     const auto& anchor_tensor = GetAnchorTensor(anchor_group);
     const auto& anchor_loop_iters = GetAnchorTensorLoopIterators(
         anchor_tensor, loop_iters, TensorIndexExpr4Tensor);
-    PADDLE_ENFORCE_EQ(
-        anchor_index2loop_iters.emplace(anchor_index, anchor_loop_iters).second,
-        true,
-        ::common::errors::AlreadyExists("The anchor index has already "
-                                        "been associated with loop iters."));
+    CHECK(anchor_index2loop_iters.emplace(anchor_index, anchor_loop_iters)
+              .second);
   }
   return anchor_index2loop_iters;
 }

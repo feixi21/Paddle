@@ -14,13 +14,11 @@
 from __future__ import annotations
 
 import abc
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Iterable
 
 from paddle.nn import Layer
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
-
     import numpy.typing as npt
 
     from paddle import Tensor

@@ -11,12 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Literal
 
 import numpy as np
-from typing_extensions import TypeAlias
 
 from paddle import _C_ops
 from paddle.base.data_feeder import (
@@ -34,32 +30,12 @@ from .utils import (
     reshape_lhs_rhs,
 )
 
-if TYPE_CHECKING:
-    from paddle import Tensor
-
-    _ReduceOp: TypeAlias = Literal[
-        "sum",
-        "mean",
-        "max",
-        "min",
-    ]
-    _MessageOp: TypeAlias = Literal[
-        "add",
-        "sub",
-        "mul",
-        "div",
-    ]
 __all__ = []
 
 
 def send_u_recv(
-    x: Tensor,
-    src_index: Tensor,
-    dst_index: Tensor,
-    reduce_op: _ReduceOp = "sum",
-    out_size: int | Tensor | None = None,
-    name: str | None = None,
-) -> Tensor:
+    x, src_index, dst_index, reduce_op="sum", out_size=None, name=None
+):
     """
     Graph Learning message passing api.
 
@@ -208,15 +184,15 @@ def send_u_recv(
 
 
 def send_ue_recv(
-    x: Tensor,
-    y: Tensor,
-    src_index: Tensor,
-    dst_index: Tensor,
-    message_op: _MessageOp = "add",
-    reduce_op: _ReduceOp = "sum",
-    out_size: int | Tensor | None = None,
-    name: str | None = None,
-) -> Tensor:
+    x,
+    y,
+    src_index,
+    dst_index,
+    message_op="add",
+    reduce_op="sum",
+    out_size=None,
+    name=None,
+):
     """
 
     Graph Learning message passing api.
@@ -410,14 +386,7 @@ def send_ue_recv(
         return out
 
 
-def send_uv(
-    x: Tensor,
-    y: Tensor,
-    src_index: Tensor,
-    dst_index: Tensor,
-    message_op: _MessageOp = "add",
-    name: str | None = None,
-) -> Tensor:
+def send_uv(x, y, src_index, dst_index, message_op="add", name=None):
     """
 
     Graph Learning message passing api.

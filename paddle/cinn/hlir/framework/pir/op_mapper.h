@@ -55,11 +55,8 @@ class OpMapper {
 
   std::vector<::pir::Value> RealOperandSources(
       const ::pir::Operation& op) const {
-    PADDLE_ENFORCE_EQ(
-        has(op, MapperType::OPERAND),
-        true,
-        ::common::errors::PreconditionNotMet(
-            "Not register OperandIndexsFunction for %s", op.name().c_str()));
+    CHECK(has(op, MapperType::OPERAND))
+        << "Not register OperandIndexsFunction for " << op.name();
     std::vector<::pir::Value> inputs;
     for (auto idx : operand_funcs_.at(op.name())()) {
       inputs.push_back(op.operand_source(idx));
@@ -69,11 +66,8 @@ class OpMapper {
 
   void AppendVariantAttrs(const ::pir::Operation& op,
                           utils::AttributeMap& attrs) const {  // NOLINT
-    PADDLE_ENFORCE_EQ(
-        has(op, MapperType::ATTRIBUTE),
-        true,
-        ::common::errors::PreconditionNotMet(
-            "Not register AppendAttrFunction for %s", op.name().c_str()));
+    CHECK(has(op, MapperType::ATTRIBUTE))
+        << "Not register AppendAttrFunction for " << op.name();
     attr_funcs_.at(op.name())(op, attrs);
   }
 

@@ -65,7 +65,7 @@ class ProcessGroupNCCL final : public ProcessGroupWithStream {
 
    private:
     bool block_cpu_in_wait_{false};
-    std::shared_ptr<platform::DeviceEvent> comm_event_;  // event on comm stream
+    platform::DeviceEvent comm_event_;  // event on comm stream
     Place task_place_;
     int gid_;
   };

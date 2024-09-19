@@ -38,7 +38,8 @@ class SqueezeTransposePattern : public paddle::drr::DrrPatternBase {
     const auto &full_1 = pat.Op(paddle::dialect::FullIntArrayOp::name(),
                                 {{"value", pat.Attr("full_1_value")}});
 
-    squeeze({&pat.Tensor("x"), &full_1()}, {&pat.Tensor("squeeze_out")});
+    squeeze({&pat.Tensor("x"), &full_1()},
+            {&pat.Tensor("squeeze_out"), &pat.Tensor("xshape")});
 
     const auto &transpose = pat.Op(paddle::dialect::TransposeOp::name(),
                                    {{"perm", pat.Attr("perm")}});

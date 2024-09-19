@@ -177,7 +177,7 @@ struct FusionGroupInfo {
   }
 };
 
-std::shared_ptr<FusionGroupInfo> GetFusionGroupInfo(
+FusionGroupInfo GetFusionGroupInfo(
     const std::vector<ir::Expr>& op_compute_bodies);
 
 }  // namespace pir

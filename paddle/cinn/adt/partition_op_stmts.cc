@@ -58,10 +58,7 @@ std::pair<std::optional<OpStmt>, List<OpStmt>> FindVisitedOpStmts(
         EquationCtx4OpStmt(op_stmt)->GetOpArgPos(anchor_index);
     const bool valid = !op_arg_pos.template Has<Undefined>();
     if (valid) {
-      PADDLE_ENFORCE_EQ(opt_anchor_op_stmt.has_value(),
-                        false,
-                        ::common::errors::InvalidArgument(
-                            "The opt_anchor_op_stmt must not have a value."));
+      CHECK(!opt_anchor_op_stmt.has_value());
       opt_anchor_op_stmt = op_stmt;
     }
   };
@@ -134,11 +131,7 @@ void MakeGetters4Indexes(
 
   const auto& UpdateCaches =
       [&](const auto& op_stmt, const auto& index, const auto& as_output) {
-        PADDLE_ENFORCE_EQ(
-            index2as_output->emplace(index, as_output).second,
-            true,
-            ::common::errors::InvalidArgument(
-                "Failed to emplace the new element into index2as_output."));
+        CHECK(index2as_output->emplace(index, as_output).second);
       };
 
   VisitEachIndexAndAsOutput(op_stmts, EquationCtx4OpStmt, UpdateCaches);
@@ -151,10 +144,7 @@ void MakeGetters4Indexes(
       [direction_equation_generator](const Index& index) -> Index {
     const auto& out_msg_index =
         direction_equation_generator->OutMsgIndex4InMsgIndex(index);
-    PADDLE_ENFORCE_EQ(out_msg_index.has_value(),
-                      true,
-                      ::common::errors::InvalidArgument(
-                          "The out_msg_index must not have a value."));
+    CHECK(out_msg_index.has_value());
     return out_msg_index.value();
   };
 }
@@ -198,10 +188,7 @@ template <typename AsOutput4IndexT, typename DoEachT>
 void VisitProducerConsumerPair(const std::vector<Index>& tensor_indexes,
                                const AsOutput4IndexT& AsOutput4Index,
                                const DoEachT& DoEach) {
-  PADDLE_ENFORCE_EQ(tensor_indexes.empty(),
-                    false,
-                    ::common::errors::InvalidArgument(
-                        "The tensor_indexes container must not be empty."));
+  CHECK(!tensor_indexes.empty());
   if (AsOutput4Index(tensor_indexes.at(0)).value()) {  // Write first
     auto producer = tensor_indexes.at(0);
     for (std::size_t idx = 1; idx < tensor_indexes.size(); ++idx) {
@@ -212,12 +199,7 @@ void VisitProducerConsumerPair(const std::vector<Index>& tensor_indexes,
     }
   } else {
     for (const auto& tensor_index : tensor_indexes) {  // Read first
-      PADDLE_ENFORCE_EQ(
-          AsOutput4Index(tensor_index).value(),
-          false,
-          ::common::errors::InvalidArgument(
-              "The value returned by AsOutput4Index(tensor_index).value() must "
-              "be false."));
+      CHECK(!AsOutput4Index(tensor_index).value());
     }
   }
 }
@@ -313,13 +295,8 @@ void UpdateAnchorIndex2AnchorGroup(
     std::unordered_map<AnchorIndex, AnchorGroup>* anchor_index2igroup_spec) {
   CleanSmallAnchorGroups(igroup_spec, anchor_index2igroup_spec);
 
-  PADDLE_ENFORCE_EQ(
-      anchor_index2igroup_spec->emplace(igroup_spec.anchor_index, igroup_spec)
-          .second,
-      true,
-      ::common::errors::InvalidArgument(
-          "Failed to emplace the element into the "
-          "map. The key might already exist."));
+  CHECK(anchor_index2igroup_spec->emplace(igroup_spec.anchor_index, igroup_spec)
+            .second);
 }
 
 void EraseCandidateAnchorIndexes(
@@ -344,10 +321,7 @@ std::unordered_map<AnchorIndex, AnchorGroup> PartitionOpStmtsIntoAnchorGroups(
     const List<OpStmt>& op_stmts,
     const std::shared_ptr<DirectionEquationGenerator>&
         direction_equation_generator) {
-  PADDLE_ENFORCE_EQ(op_stmts->empty(),
-                    false,
-                    ::common::errors::InvalidArgument(
-                        "The op_stmts container must not be empty."));
+  CHECK(!op_stmts->empty());
   std::unordered_map<AnchorIndex, AnchorGroup> anchor_index2igroup_spec{};
 
   const auto& OpStmt4OpPlaceHolder =
@@ -379,10 +353,7 @@ std::unordered_map<AnchorIndex, AnchorGroup> PartitionOpStmtsIntoAnchorGroups(
     if (visited_op_stmts->empty()) {
       continue;
     }
-    PADDLE_ENFORCE_EQ(opt_anchor_op_stmt.has_value(),
-                      true,
-                      ::common::errors::InvalidArgument(
-                          "The opt_anchor_op_stmt must not have a value."));
+    CHECK(opt_anchor_op_stmt.has_value());
     all_visited_op_stmts.insert(visited_op_stmts->begin(),
                                 visited_op_stmts->end());
 
@@ -446,10 +417,7 @@ void CheckEquationSolvable(const AnchorGroup& igroup_spec,
 
   CheckEquationsSolvable(equation_graph_view, igroup_spec.anchor_index, &ctx);
   AggregateAnchorGroupOpStmt(igroup_spec, [&](const auto& op_stmt) {
-    PADDLE_ENFORCE_EQ(IsOpSolved(op_stmt),
-                      true,
-                      ::common::errors::InvalidArgument(
-                          "The operation statement must be solved."));
+    CHECK(IsOpSolved(op_stmt));
     return tBreak<bool>{false};
   });
 }
@@ -459,12 +427,7 @@ std::function<std::size_t(const OpStmt&)> MakeGetterOrderValue4OpStmt(
   using OpStmt2OrderValue = std::unordered_map<OpStmt, std::size_t>;
   const auto& op_stmt2order_value = std::make_shared<OpStmt2OrderValue>();
   for (std::size_t idx = 0; idx < op_stmts->size(); ++idx) {
-    PADDLE_ENFORCE_EQ(
-        op_stmt2order_value->emplace(op_stmts->at(idx), idx).second,
-        true,
-        ::common::errors::InvalidArgument(
-            "Failed to emplace the element into op_stmt2order_value. The key "
-            "might already exist."));
+    CHECK(op_stmt2order_value->emplace(op_stmts->at(idx), idx).second);
   }
   return [op_stmt2order_value](const auto& op_stmt) {
     return op_stmt2order_value->at(op_stmt);

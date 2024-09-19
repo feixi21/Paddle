@@ -43,7 +43,7 @@ class Squeeze2OpConverter : public OpConverter {
               "The necessary attributes of the squeeze2 operator axes is "
               "missing."));
         } else if (input_dims.d[i] == 1) {
-          axes.push_back(i);
+          axes.push_back(engine_->with_dynamic_shape() ? i : i + 1);
         }
       }
     }
@@ -58,7 +58,11 @@ class Squeeze2OpConverter : public OpConverter {
 
     std::vector<bool> should_squeeze(input_dims.nbDims, false);
     for (int& axis : axes) {
-      axis += (axis < 0) ? input_dims.nbDims : 0;
+      if (engine_->with_dynamic_shape()) {
+        axis += (axis < 0) ? input_dims.nbDims : 0;
+      } else {
+        axis += (axis < 0) ? input_dims.nbDims : -1;
+      }
       should_squeeze[axis] = true;
     }
 
@@ -74,9 +78,13 @@ class Squeeze2OpConverter : public OpConverter {
     }
 
     auto* layer = TRT_ENGINE_ADD_LAYER(engine_, Shuffle, *input);
-    auto* shape_tensor = Shape(input);
-    auto* real_shape_tensor = Gather(shape_tensor, gather_indices);
-    layer->setInput(1, *real_shape_tensor);
+    if (engine_->with_dynamic_shape()) {
+      auto* shape_tensor = Shape(input);
+      auto* real_shape_tensor = Gather(shape_tensor, gather_indices);
+      layer->setInput(1, *real_shape_tensor);
+    } else {
+      layer->setReshapeDimensions(trt_out_dims);
+    }
     ReplenishLayerAndOutput(layer, "squeeze2", {output_name}, test_mode);
   }
 };

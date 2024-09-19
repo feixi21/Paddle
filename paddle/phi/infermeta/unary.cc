@@ -586,7 +586,7 @@ void ClassCenterSampleInferMeta(const MetaTensor& label,
           "output of sampled local class center should not be null."));
   remapped_label->set_dims(label.dims());
   remapped_label->set_dtype(label.dtype());
-  sampled_local_class_center->set_dims(common::make_ddim({-1}));
+  sampled_local_class_center->set_dims(common::make_ddim({num_samples}));
   sampled_local_class_center->set_dtype(label.dtype());
 }
 
@@ -1129,7 +1129,6 @@ void EmbeddingGradSparseInferMeta(const MetaTensor& x,
       out->set_dtype(x.dtype());
     } else {
       out->share_dims(weight);
-      out->set_dtype(weight.dtype());
     }
   }
 }
@@ -1330,31 +1329,33 @@ void ExpandInferMeta(const MetaTensor& x,
                         "must be a positive integer.",
                         expand_shape.size()));
 
-  int out_rank = expand_shape.size();
-  const auto& out_shape = [&]() -> std::vector<int64_t> {
-    std::vector<int64_t> res = expand_shape;
-    int x_rank = x_dims.size();
-    const auto& DealWithMinusOne = [&]() {
-      for (int x_idx = x_rank - 1, out_idx = out_rank - 1; x_idx >= 0;
-           x_idx--, out_idx--) {
-        if (res[out_idx] == -1) {
-          res[out_idx] = x_dims[x_idx];
-        }
+  auto out_rank =
+      std::max(static_cast<size_t>(x_dims.size()), expand_shape.size());
+  std::vector<int64_t> out_shape(out_rank);
+  for (int i = 0; i < static_cast<int>(expand_shape.size()); ++i) {
+    if (x_dims[i] == -1) {  // NOLINT
+      out_shape[i] = -1;
+    } else if (expand_shape[i] == -1) {
+      if (static_cast<int>(x_dims.size()) > i) {
+        out_shape[i] = x_dims[i];
+      } else {
+        out_shape[i] = -1;
       }
-    };
-    const auto& DealWithMinusTwo = [&]() {
+    } else if (expand_shape[i] == -2) {
       // We use -2 to represent the element in expand_shape is a var.
-      for (int x_idx = x_rank - 1, out_idx = out_rank - 1; out_idx >= 0;
-           x_idx--, out_idx--) {
-        if (res[out_idx] == -2) {
-          res[out_idx] = -1;
-        }
-      }
-    };
-    DealWithMinusOne();
-    DealWithMinusTwo();
-    return res;
-  }();
+      out_shape[i] = -1;
+    } else {
+      PADDLE_ENFORCE_GT(
+          expand_shape[i],
+          0,
+          common::errors::InvalidArgument(
+              "The %uth element of 'shape' for expand_v2 op must be "
+              "greater than 0, but the value given is %d.",
+              i,
+              expand_shape[i]));
+      out_shape[i] = expand_shape[i];
+    }
+  }
 
   out->set_dims(common::make_ddim(out_shape));
   out->set_dtype(x.dtype());
@@ -1561,27 +1562,18 @@ void FFTR2CInferMeta(const MetaTensor& x,
   }
 }
 
+void FlattenInferMeta(const MetaTensor& x,
+                      int start_axis,
+                      int stop_axis,
+                      MetaTensor* out) {
+  FlattenWithXShapeInferMeta(x, start_axis, stop_axis, out, nullptr);
+}
+
 void FlattenWithXShapeInferMeta(const MetaTensor& x,
                                 int start_axis,
                                 int stop_axis,
                                 MetaTensor* out,
                                 MetaTensor* xshape) {
-  FlattenInferMeta(x, start_axis, stop_axis, out);
-  if (xshape == nullptr) return;
-  const auto& x_dims = x.dims();
-  std::vector<int64_t> xshape_dims(x_dims.size() + 1);
-  xshape_dims[0] = 0;
-  for (int i = 0; i < x_dims.size(); ++i) {
-    xshape_dims[i + 1] = x_dims[i];
-  }
-  xshape->set_dims(common::make_ddim(xshape_dims));
-  xshape->share_lod(x);
-}
-
-void FlattenInferMeta(const MetaTensor& x,
-                      int start_axis,
-                      int stop_axis,
-                      MetaTensor* out) {
   auto x_dims = x.dims();
   int in_dims_size = x_dims.size();
 
@@ -1643,6 +1635,14 @@ void FlattenInferMeta(const MetaTensor& x,
     // are the same.
     out->share_lod(x);
   }
+  if (xshape == nullptr) return;
+  std::vector<int64_t> xshape_dims(x_dims.size() + 1);
+  xshape_dims[0] = 0;
+  for (int i = 0; i < x_dims.size(); ++i) {
+    xshape_dims[i + 1] = x_dims[i];
+  }
+  xshape->set_dims(common::make_ddim(xshape_dims));
+  xshape->share_lod(x);
 }
 
 void Flatten2InferMeta(const MetaTensor& x,
@@ -2473,7 +2473,8 @@ void LUInferMeta(const MetaTensor& x,
       infos,
       common::errors::InvalidArgument("Output(Infos) should not be nullptr."));
   if (x_rank == 2) {
-    infos->set_dims(common::make_ddim({}));
+    auto Infos_dim = std::vector<int>(1);
+    infos->set_dims(common::make_ddim(Infos_dim));
   } else {
     auto Infos_dim =
         std::vector<int>(dims_vec.begin(), dims_vec.begin() + x_rank - 2);
@@ -2912,7 +2913,7 @@ void OneHotRawInferMeta(const MetaTensor& x,
 }
 
 void OneHotInferMeta(const MetaTensor& x,
-                     const Scalar& num_classes,
+                     const Scalar& depth_t,
                      MetaTensor* out) {
   auto x_dims = x.dims();
   PADDLE_ENFORCE_GE(x_dims.size(),
@@ -2920,13 +2921,13 @@ void OneHotInferMeta(const MetaTensor& x,
                     common::errors::InvalidArgument(
                         "Rank of Input(X) should be at least 0."));
 
-  int num_classes_int = num_classes.to<int>();
+  int depth = depth_t.to<int>();
   auto out_dims_vec = common::vectorize(x_dims);
-  out_dims_vec.push_back(num_classes_int);
+  out_dims_vec.push_back(depth);
   auto out_dims = common::make_ddim(out_dims_vec);
-
   out->set_dims(out_dims);
   out->share_lod(x);
+
   out->set_dtype(phi::DataType::FLOAT32);
 }
 
@@ -5987,12 +5988,6 @@ void CheckNumericsInferMeta(const MetaTensor& tensor,
 void StridedUnChangedInferMeta(const MetaTensor& x, MetaTensor* out) {
   out->share_meta(x);
   out->set_strides(x.strides());
-}
-
-void StraightThroughEstimatorInferMeta(const MetaTensor& out_grad,
-                                       MetaTensor* x_grad) {
-  x_grad->set_dims(out_grad.dims());
-  x_grad->set_dtype(out_grad.dtype());
 }
 
 void NumberCountInferMeta(const MetaTensor& x,

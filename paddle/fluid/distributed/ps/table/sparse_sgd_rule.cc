@@ -18,8 +18,6 @@
 
 #include "paddle/common/flags.h"
 
-#include "paddle/common/enforce.h"
-
 PD_DEFINE_bool(enable_show_scale_gradient, true, "enable show scale gradient");
 
 namespace paddle::distributed {
@@ -34,11 +32,9 @@ void SparseNaiveSGDRule::LoadConfig(const SparseCommonSGDRuleParameter &param,
     _min_bound = -std::numeric_limits<float>::max();
     _max_bound = std::numeric_limits<float>::max();
   } else {
-    PADDLE_ENFORCE_GE(naive_param.weight_bounds_size(),
-                      2,
-                      common::errors::InvalidArgument(
-                          "invalid repeated size for weight_bounds: %d",
-                          naive_param.weight_bounds_size()));
+    CHECK(naive_param.weight_bounds_size() >= 2)
+        << "invalid repeated size for weight_bounds:"
+        << naive_param.weight_bounds_size();
     _min_bound = naive_param.weight_bounds(0);
     _max_bound = naive_param.weight_bounds(1);
   }
@@ -83,11 +79,9 @@ void SparseAdaGradSGDRule::LoadConfig(const SparseCommonSGDRuleParameter &param,
     _min_bound = -std::numeric_limits<float>::max();
     _max_bound = std::numeric_limits<float>::max();
   } else {
-    PADDLE_ENFORCE_GE(adagrad_param.weight_bounds_size(),
-                      2,
-                      common::errors::InvalidArgument(
-                          "invalid repeated size for weight_bounds: %d",
-                          adagrad_param.weight_bounds_size()));
+    CHECK(adagrad_param.weight_bounds_size() >= 2)
+        << "invalid repeated size for weight_bounds:"
+        << adagrad_param.weight_bounds_size();
     _min_bound = adagrad_param.weight_bounds(0);
     _max_bound = adagrad_param.weight_bounds(1);
   }
@@ -142,11 +136,9 @@ void StdAdaGradSGDRule::LoadConfig(const SparseCommonSGDRuleParameter &param,
     _min_bound = -std::numeric_limits<float>::max();
     _max_bound = std::numeric_limits<float>::max();
   } else {
-    PADDLE_ENFORCE_GE(adagrad_param.weight_bounds_size(),
-                      2,
-                      common::errors::InvalidArgument(
-                          "invalid repeated size for weight_bounds: %d",
-                          adagrad_param.weight_bounds_size()));
+    CHECK(adagrad_param.weight_bounds_size() >= 2)
+        << "invalid repeated size for weight_bounds:"
+        << adagrad_param.weight_bounds_size();
     _min_bound = adagrad_param.weight_bounds(0);
     _max_bound = adagrad_param.weight_bounds(1);
   }
@@ -198,11 +190,9 @@ void SparseAdamSGDRule::LoadConfig(const SparseCommonSGDRuleParameter &param,
     _min_bound = -std::numeric_limits<float>::max();
     _max_bound = std::numeric_limits<float>::max();
   } else {
-    PADDLE_ENFORCE_GE(adam_param.weight_bounds_size(),
-                      2,
-                      common::errors::InvalidArgument(
-                          "invalid repeated size for weight_bounds: %d",
-                          adam_param.weight_bounds_size()));
+    CHECK(adam_param.weight_bounds_size() >= 2)
+        << "invalid repeated size for weight_bounds:"
+        << adam_param.weight_bounds_size();
     _min_bound = adam_param.weight_bounds(0);
     _max_bound = adam_param.weight_bounds(1);
   }
@@ -274,11 +264,9 @@ void SparseSharedAdamSGDRule::LoadConfig(
     _min_bound = -std::numeric_limits<float>::max();
     _max_bound = std::numeric_limits<float>::max();
   } else {
-    PADDLE_ENFORCE_GE(adam_param.weight_bounds_size(),
-                      2,
-                      common::errors::InvalidArgument(
-                          "invalid repeated size for weight_bounds: %d",
-                          adam_param.weight_bounds_size()));
+    CHECK(adam_param.weight_bounds_size() >= 2)
+        << "invalid repeated size for weight_bounds:"
+        << adam_param.weight_bounds_size();
     _min_bound = adam_param.weight_bounds(0);
     _max_bound = adam_param.weight_bounds(1);
   }
@@ -358,11 +346,9 @@ void SparseAdaGradV2SGDRule::LoadConfig(
     _min_bound = -std::numeric_limits<float>::max();
     _max_bound = std::numeric_limits<float>::max();
   } else {
-    PADDLE_ENFORCE_GE(adagrad_param.weight_bounds_size(),
-                      2,
-                      common::errors::InvalidArgument(
-                          "invalid repeated size for weight_bounds: %d",
-                          adagrad_param.weight_bounds_size()));
+    CHECK(adagrad_param.weight_bounds_size() >= 2)
+        << "invalid repeated size for weight_bounds:"
+        << adagrad_param.weight_bounds_size();
     _min_bound = adagrad_param.weight_bounds(0);
     _max_bound = adagrad_param.weight_bounds(1);
   }

@@ -108,25 +108,18 @@ class DynamicToStaticConverter {
     VisitEachValue(fusion_op_, [&](pir::Value value) {
       updated |= UpdateValueShape(value);
     });
-    shape_analysis_->InitInferContext();
+    shape_analysis_->Init();
     return updated;
   }
 
  private:
   DimExpr4SymbolName InitDimExpr4SymbolName() {
     const auto* map = GetGlobalDynamicToStaticDimMap();
-    PADDLE_ENFORCE_EQ(
-        map->has_value(),
-        true,
-        ::common::errors::InvalidArgument("The map must have a value."));
+    CHECK(map->has_value());
     return
         [map](
             const std::string& symbol_name) -> std::optional<symbol::DimExpr> {
-          PADDLE_ENFORCE_NE(map->value().find(symbol_name),
-                            map->value().end(),
-                            ::common::errors::InvalidArgument(
-                                "The symbol '%s' must be present in the map.",
-                                symbol_name.c_str()));
+          CHECK(map->value().find(symbol_name) != map->value().end());
           return map->value().at(symbol_name);
         };
   }
@@ -164,10 +157,7 @@ class DynamicToStaticConverter {
     VisitEachDimExpr(dynamic_shapes, [&](const symbol::DimExpr& dim_expr) {
       const auto& static_shape = symbol::SimplifyDimExpr(
           cinn::dialect::SubstituteDimExpr(dim_expr, DimExpr4SymbolName_));
-      PADDLE_ENFORCE_EQ(static_shape.Has<std::int64_t>(),
-                        true,
-                        ::common::errors::InvalidArgument(
-                            "The static_shape must have an int64_t type."));
+      CHECK(static_shape.Has<std::int64_t>());
       static_shapes.push_back(static_shape.Get<std::int64_t>());
     });
     return static_shapes;
@@ -196,18 +186,7 @@ class DynamicToStaticConverter {
                               target_shape.at(i)));
         update = true;
       } else {
-        PADDLE_ENFORCE_EQ(
-            origin_shape.at(i),
-            target_shape.at(i),
-            ::common::errors::InvalidArgument(
-                "The shape at index %d must be equal in both origin_shape and "
-                "target_shape, but got origin_shape[%d] = %d and "
-                "target_shape[%d] = %d.",
-                i,
-                i,
-                origin_shape.at(i),
-                i,
-                target_shape.at(i)));
+        CHECK(origin_shape.at(i) == target_shape.at(i));
       }
     }
     if (update) {

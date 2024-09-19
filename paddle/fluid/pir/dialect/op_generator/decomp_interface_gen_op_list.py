@@ -36,7 +36,6 @@ decomp_interface_declare_gen_op_list = [
     "hardswish",
     "hardsigmoid",
     "heaviside",
-    "huber_loss",
     "group_norm",
     "index_sample",
     "index_select",
@@ -65,9 +64,9 @@ decomp_interface_declare_gen_op_list = [
     "squared_l2_norm",
     "squeeze",
     "stack",
-    "unbind",
     "unsqueeze",
-    "unstack",
+    "unbind",
+    "huber_loss",
 ]
 
 # come into effect in generated file op_decomp.cc
@@ -87,7 +86,6 @@ decomp_interface_implementation_gen_op_list = [
     "hardswish",
     "hardsigmoid",
     "heaviside",
-    "huber_loss",
     "group_norm",
     "index_sample",
     "index_select",
@@ -115,9 +113,9 @@ decomp_interface_implementation_gen_op_list = [
     "squared_l2_norm",
     "squeeze",
     "stack",
-    "unbind",
     "unsqueeze",
-    "unstack",
+    "unbind",
+    "huber_loss",
 ]
 
 # xshape output will no longer used after decomp, but return none to keep output num the same as origin op

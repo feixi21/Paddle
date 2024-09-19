@@ -33,8 +33,6 @@ void RunCombineInstr(const std::shared_ptr<CombineInstr>& instr,
     const auto& to_insert = interpreter->scope.at(name);
     new_pattern->Extend(to_insert->fusion_ops);
   }
-  VLOG(4) << "After CombineInstr Pattern: \n"
-          << GetFusibleOpsExpr(new_pattern->fusion_ops);
   interpreter->scope[instr->result_] = new_pattern;
 }
 
@@ -71,39 +69,25 @@ void RunTrivialInlineInstr(const std::shared_ptr<TrivialInlineInstr>& instr,
 
 void RunTmpTransformInstr(const std::shared_ptr<TmpTransformInstr>& instr,
                           FusionInterpreter* interpreter) {
-  PADDLE_ENFORCE_GT(
-      interpreter->scope.count(instr->upstream_),
-      0,
-      ::common::errors::NotFound("Can not find TmpTransformInstr uptream."));
-  PADDLE_ENFORCE_GT(
-      interpreter->scope.count(instr->downstream_),
-      0,
-      ::common::errors::NotFound("Can not find TmpTransformInstr downstream."));
-
-  PADDLE_ENFORCE_EQ(
-      interpreter->scope[instr->downstream_]->fusion_ops.size(),
-      1,
-      ::common::errors::InvalidArgument(
-          "Downstream %s must have only one fusion_op.", instr->downstream_));
+  VLOG(4) << interpreter->scope[instr->upstream_]->fusion_ops.size();
+  PADDLE_ENFORCE_EQ(interpreter->scope[instr->downstream_]->fusion_ops.size(),
+                    1,
+                    ::common::errors::InvalidArgument(
+                        "Downstream op must have only one fusion_op."));
+  auto upstream_op = std::get<ReduceOp>(
+      interpreter->scope[instr->upstream_]->fusion_ops.front());
   auto downstream_op =
       interpreter->scope[instr->downstream_]->fusion_ops.front();
-  std::vector<FusibleOp> changed_upstreams;
-  for (auto fusion_op : interpreter->scope[instr->upstream_]->fusion_ops) {
-    auto upstream_op = std::get<ReduceOp>(fusion_op);
-    changed_upstreams = ConcatVector(
-        changed_upstreams,
-        cinn::hlir::framework::pir::trivial_fusion_detail::
-            TransformReduceLoopRange(
-                upstream_op, &downstream_op, instr->fake_reduce_iter_idx_));
-  }
-
   // inplace set the upstream
-  interpreter->scope[instr->out_upstream_] = std::make_shared<ScopeElement>();
-  interpreter->scope[instr->out_upstream_]->fusion_ops = changed_upstreams;
+  ScopeElementPtr new_pattern = std::make_shared<ScopeElement>();
+  new_pattern->fusion_ops = cinn::hlir::framework::pir::trivial_fusion_detail::
+      TransformReduceLoopRange(
+          upstream_op, &downstream_op, instr->fake_reduce_iter_idx_);
+  interpreter->scope[instr->out_upstream_] = new_pattern;
   // inplace set the downstream
-  interpreter->scope[instr->out_downstream_] = std::make_shared<ScopeElement>();
-  interpreter->scope[instr->out_downstream_]->fusion_ops.push_back(
-      downstream_op);
+  ScopeElementPtr new_downstream = std::make_shared<ScopeElement>();
+  new_downstream->fusion_ops.push_back(downstream_op);
+  interpreter->scope[instr->out_downstream_] = new_downstream;
 }
 
 void RunTrivialLoopAlignInstr(

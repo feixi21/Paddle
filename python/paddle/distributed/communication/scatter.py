@@ -14,11 +14,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Sequence
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-
     from paddle import Tensor
     from paddle.base.core import task
     from paddle.distributed.communication.group import Group

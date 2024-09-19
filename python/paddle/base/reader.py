@@ -24,7 +24,6 @@ import numpy as np
 import paddle
 from paddle.base.framework import _set_expected_place
 from paddle.pir.core import datatype_to_vartype
-from paddle.utils import deprecated
 
 from . import core
 from .data_feeder import BatchedTensorProvider, DataFeeder
@@ -156,7 +155,6 @@ class DataLoaderBase:
         return arr
 
 
-@deprecated(update_to="paddle.io.DataLoader")
 class DataLoader:
     @staticmethod
     def from_generator(
@@ -1064,11 +1062,10 @@ class GeneratorLoader(DataLoaderBase):
         else:
             places = _get_paddle_place(places)
         has_lod = False
-        if not in_pir_mode():
-            for f in self._feed_list:
-                if f.lod_level != 0:
-                    has_lod = True
-                    break
+        for f in self._feed_list:
+            if f.lod_level != 0:
+                has_lod = True
+                break
 
         if has_lod:
             self.set_sample_list_generator(
@@ -1130,7 +1127,6 @@ class GeneratorLoader(DataLoaderBase):
         return self
 
 
-@deprecated()
 class PyReader(DataLoaderBase):
     r"""
     Create a reader object for data feeding in Python.

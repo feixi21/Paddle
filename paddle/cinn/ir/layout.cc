@@ -19,14 +19,8 @@ namespace ir {
 
 void Layout::Verify() {
   {
-    PADDLE_ENFORCE_NE(
-        name_.empty(),
-        true,
-        ::common::errors::InvalidArgument("The name should not be empty."));
-    PADDLE_ENFORCE_NE(
-        axes_.empty(),
-        true,
-        ::common::errors::InvalidArgument("The axes should not be empty."));
+    CHECK(!name_.empty());
+    CHECK(!axes_.empty());
     axis_names_ = "";
     for (auto& axis : axes_) {
       PADDLE_ENFORCE_EQ(
@@ -34,15 +28,10 @@ void Layout::Verify() {
           1U,
           ::common::errors::InvalidArgument("axis name size must be 1"));
       auto axis_name = axis->name[0];
-      PADDLE_ENFORCE_EQ(
-          (axis_name >= 'A' && axis_name <= 'Z') ||
-              (axis_name >= 'a' && axis_name <= 'z'),
-          true,
-          ::common::errors::InvalidArgument("Axis name must be a letter."));
-      PADDLE_ENFORCE_EQ(axis_names_.find(axis_name) == axis_names_.npos,
-                        true,
-                        ::common::errors::InvalidArgument(
-                            "{} has already existed.", axis_name));
+      CHECK((axis_name >= 'A' && axis_name <= 'Z') ||
+            (axis_name >= 'a' && axis_name <= 'z'));
+      CHECK(axis_names_.find(axis_name) == axis_names_.npos)
+          << axis_name << " has already exsit.";
       axis_names_ += axis_name;
     }
     int offset = 'A' - 'a';
@@ -53,20 +42,14 @@ void Layout::Verify() {
           ::common::errors::InvalidArgument("axis name size must be 1"));
       auto axis_name = axis->name[0];
       if (axis_name >= 'a' && axis_name <= 'z') {
-        PADDLE_ENFORCE_NE(
-            axis_names_.find(axis_name + offset) == axis_names_.npos,
-            true,
-            ::common::errors::InvalidArgument(
-                "sub-axis {} finds no primal axis", axis_name));
+        CHECK(axis_names_.find(axis_name + offset) != axis_names_.npos)
+            << "sub-axis " << axis_name << " finds no primal axis";
       }
     }
   }
 }
 Layout::Layout(const std::string& name) {
-  PADDLE_ENFORCE_NE(
-      name.empty(),
-      true,
-      ::common::errors::InvalidArgument("The name should not be empty."));
+  CHECK(!name.empty());
   int factor = 0;
   std::vector<Var> axes;
   for (char c : name) {

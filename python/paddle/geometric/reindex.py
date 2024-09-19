@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Sequence
 
 import paddle
 from paddle import _C_ops
@@ -24,8 +24,6 @@ from paddle.base.layer_helper import LayerHelper
 from paddle.framework import in_dynamic_or_pir_mode
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-
     from paddle import Tensor
 
 __all__ = []

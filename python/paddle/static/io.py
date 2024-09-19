@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from __future__ import annotations
 
 import errno
 import inspect
@@ -20,7 +19,6 @@ import os
 import pickle
 import sys
 import warnings
-from typing import TYPE_CHECKING, Any, TypedDict, overload
 
 import numpy as np
 
@@ -30,6 +28,7 @@ from paddle.base import (
     Variable,
     core,
     default_main_program,
+    program_guard,
     unique_name,
 )
 from paddle.base.executor import Executor, global_scope
@@ -70,37 +69,6 @@ from .pir_io import (
     save_vars_pir,
 )
 
-if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
-
-    import numpy.typing as npt
-    from typing_extensions import NotRequired, Unpack
-
-    from paddle import Tensor
-
-    class _NormalizeProgramKwargs(TypedDict):
-        skip_prune_program: NotRequired[bool]
-
-    class _SerializeProgramKwargs(TypedDict):
-        program: NotRequired[Program]
-        legacy_format: NotRequired[bool]
-
-    class _SerializePersistablesKwargs(TypedDict):
-        program: NotRequired[Program]
-
-    class _SaveInferenceModelKwargs(TypedDict):
-        program: NotRequired[Program]
-        clip_extra: NotRequired[bool]
-        legacy_format: NotRequired[bool]
-
-    class _LoadInferenceModelKwargs(TypedDict):
-        model_filename: NotRequired[str]
-        params_filename: NotRequired[str]
-
-    class _SaveKwargs(TypedDict):
-        pickle_protocol: NotRequired[int]
-
-
 __all__ = []
 
 _logger = get_logger(
@@ -130,10 +98,8 @@ def _clone_var_in_block(block, var):
 
 
 def prepend_feed_ops(
-    inference_program: Program,
-    feed_target_names: Sequence[str],
-    feed_holder_name: str = 'feed',
-) -> None:
+    inference_program, feed_target_names, feed_holder_name='feed'
+):
     if len(feed_target_names) == 0:
         return
 
@@ -161,10 +127,8 @@ def prepend_feed_ops(
 
 
 def append_fetch_ops(
-    inference_program: Program,
-    fetch_target_names: Sequence[str],
-    fetch_holder_name: str = 'fetch',
-) -> None:
+    inference_program, fetch_target_names, fetch_holder_name='fetch'
+):
     global_block = inference_program.global_block()
     fetch_var = global_block.create_var(
         name=fetch_holder_name,
@@ -181,12 +145,7 @@ def append_fetch_ops(
         )
 
 
-def normalize_program(
-    program: Program,
-    feed_vars: Tensor | list[Tensor],
-    fetch_vars: Tensor | list[Tensor],
-    **kwargs: Unpack[_NormalizeProgramKwargs],
-) -> Program:
+def normalize_program(program, feed_vars, fetch_vars, **kwargs):
     """
 
     Normalize/Optimize a program according to feed_vars and fetch_vars.
@@ -244,11 +203,6 @@ def normalize_program(
             "fetch_vars type must be a Variable or a list of Variable."
         )
 
-    if len(program.global_block().ops) == 0:
-        raise ValueError(
-            "program must not be empty. at least one operator is required!"
-        )
-
     # remind users to set auc_states to 0 if auc op were found.
     for op in program.global_block().ops:
         # clear device of Op
@@ -259,6 +213,17 @@ def normalize_program(
                 "Be sure that you have set auc states to 0 before saving inference model."
             )
             break
+
+    # fix the bug that the activation op's output as target will be pruned.
+    # will affect the inference performance.
+    # TODO(Superjomn) add an IR pass to remove 1-scale op.
+    with program_guard(program):
+        uniq_fetch_vars = []
+        for i, var in enumerate(fetch_vars):
+            if var.dtype != paddle.bool:
+                var = paddle.scale(var, 1.0, name=f"save_infer_model/scale_{i}")
+            uniq_fetch_vars.append(var)
+        fetch_vars = uniq_fetch_vars
 
     # serialize program
     copy_program = program.clone()
@@ -302,11 +267,7 @@ def normalize_program(
 
 
 @static_only
-def serialize_program(
-    feed_vars: Tensor | list[Tensor],
-    fetch_vars: Tensor | list[Tensor],
-    **kwargs: Unpack[_SerializeProgramKwargs],
-) -> bytes:
+def serialize_program(feed_vars, fetch_vars, **kwargs):
     """
 
     Serialize default main program according to feed_vars and fetch_vars.
@@ -358,7 +319,7 @@ def serialize_program(
     return _serialize_program(program, legacy_format=legacy_format)
 
 
-def _serialize_program(program: Program, legacy_format: bool = False) -> bytes:
+def _serialize_program(program, legacy_format=False):
     """
     serialize given program to bytes.
     """
@@ -366,12 +327,7 @@ def _serialize_program(program: Program, legacy_format: bool = False) -> bytes:
 
 
 @static_only
-def serialize_persistables(
-    feed_vars: Tensor | list[Tensor],
-    fetch_vars: Tensor | list[Tensor],
-    executor: Executor,
-    **kwargs: Unpack[_SerializePersistablesKwargs],
-) -> bytes:
+def serialize_persistables(feed_vars, fetch_vars, executor, **kwargs):
     """
 
     Serialize parameters using given executor and default main program according to feed_vars and fetch_vars.
@@ -422,7 +378,7 @@ def serialize_persistables(
     return _serialize_persistables(program, executor)
 
 
-def _serialize_persistables(program: Program, executor: Executor) -> bytes:
+def _serialize_persistables(program, executor):
     """
     Serialize parameters using given program and executor.
     """
@@ -469,7 +425,7 @@ def _serialize_persistables(program: Program, executor: Executor) -> bytes:
     return global_scope().find_var(out_var_name).get_bytes()
 
 
-def save_to_file(path: str, content: bytes) -> None:
+def save_to_file(path, content):
     """
     Save content to given path.
 
@@ -511,12 +467,8 @@ def save_to_file(path: str, content: bytes) -> None:
 
 @static_only
 def save_inference_model(
-    path_prefix: str,
-    feed_vars: Tensor | list[Tensor],
-    fetch_vars: Tensor | list[Tensor],
-    executor: Executor,
-    **kwargs: Unpack[_SaveInferenceModelKwargs],
-) -> None:
+    path_prefix, feed_vars, fetch_vars, executor, **kwargs
+):
     """
     Save current model and its parameters to given path. i.e.
     Given ``path_prefix = "PATH/modelname"``, after invoking
@@ -642,7 +594,7 @@ def save_inference_model(
 
 
 @static_only
-def deserialize_program(data: bytes) -> Program:
+def deserialize_program(data):
     """
 
     Deserialize given data to a program.
@@ -689,9 +641,7 @@ def deserialize_program(data: bytes) -> Program:
 
 # NOTE(liuyuanle): Due to load from memory, deserialize_persistables does not support loading weights with file sizes exceeding 2GB.
 @static_only
-def deserialize_persistables(
-    program: Program, data: bytes, executor: Executor
-) -> Program:
+def deserialize_persistables(program, data, executor):
     """
 
     Deserialize given data to parameters according to given program and executor.
@@ -792,7 +742,7 @@ def deserialize_persistables(
             )
 
 
-def load_from_file(path: str) -> bytes:
+def load_from_file(path):
     """
     Load file in binary mode.
 
@@ -834,11 +784,7 @@ def load_from_file(path: str) -> bytes:
 
 
 @static_only
-def load_inference_model(
-    path_prefix: str | None,
-    executor: Executor,
-    **kwargs: Unpack[_LoadInferenceModelKwargs],
-) -> list[Program | list[str] | list[Tensor]]:
+def load_inference_model(path_prefix, executor, **kwargs):
     """
 
     Load inference model from a given path. By this API, you can get the model
@@ -892,9 +838,9 @@ def load_inference_model(
             >>> [inference_program, feed_target_names, fetch_targets] = (
             ...     paddle.static.load_inference_model(path_prefix, exe))
             >>> tensor_img = np.array(np.random.random((64, 784)), dtype=np.float32) # type: ignore[var-annotated]
-            >>> results = exe.run(inference_program,  # type: ignore[arg-type]
-            ...               feed={feed_target_names[0]: tensor_img},  # type: ignore[index,dict-item]
-            ...               fetch_list=fetch_targets)  # type: ignore[arg-type]
+            >>> results = exe.run(inference_program,
+            ...               feed={feed_target_names[0]: tensor_img},
+            ...               fetch_list=fetch_targets)
 
             # In this example, the inference program was saved in file
             # "./infer_model.pdmodel" and parameters were saved in file
@@ -1031,30 +977,6 @@ def load_inference_model(
             program.global_block().var(name) for name in fetch_target_names
         ]
     return [program, feed_target_names, fetch_targets]
-
-
-@overload
-@dygraph_not_support
-def save_vars(
-    executor: Executor,
-    dirname: None,
-    main_program: Program | None = ...,
-    vars: list[Tensor] | None = ...,
-    predicate: Callable[[Tensor], bool] | None = ...,
-    filename: None = ...,
-) -> bytes: ...
-
-
-@overload
-@dygraph_not_support
-def save_vars(
-    executor: Executor,
-    dirname: str,
-    main_program: Program | None = ...,
-    vars: list[Tensor] | None = ...,
-    predicate: Callable[[Tensor], bool] | None = ...,
-    filename: str = ...,
-) -> None: ...
 
 
 @dygraph_not_support
@@ -1223,13 +1145,13 @@ def save_vars(
 
 
 def load_vars(
-    executor: Executor,
-    dirname: str,
-    main_program: Program | None = None,
-    vars: list[Tensor] | None = None,
-    predicate: Callable[[Tensor], bool] | None = None,
-    filename: str | None = None,
-) -> None:
+    executor,
+    dirname,
+    main_program=None,
+    vars=None,
+    predicate=None,
+    filename=None,
+):
     """
     :api_attr: Static Graph
 
@@ -1481,12 +1403,7 @@ def load_vars(
 
 
 @static_only
-def save(
-    program: Program,
-    model_path: str,
-    protocol: int = 4,
-    **configs: Unpack[_SaveKwargs],
-) -> None:
+def save(program, model_path, protocol=4, **configs):
     """
 
     This function save parameters, optimizer information and network description to model_path.
@@ -1587,12 +1504,7 @@ def save(
 
 
 @static_only
-def load(
-    program: Program,
-    model_path: str,
-    executor: Executor | None = None,
-    var_list: Sequence[Tensor] | None = None,
-) -> None:
+def load(program, model_path, executor=None, var_list=None):
     """
     :api_attr: Static Graph
 
@@ -1809,9 +1721,7 @@ def load(
 
 
 @static_only
-def set_program_state(
-    program: Program, state_dict: dict[str, npt.NDArray[Any]]
-) -> None:
+def set_program_state(program, state_dict):
     """
     Set program parameter from state_dict
 
@@ -1908,7 +1818,7 @@ def set_program_state(
 
 
 @dygraph_not_support
-def get_program_persistable_vars(program: Program) -> list[Tensor]:
+def get_program_persistable_vars(program):
     """
     Get all the persistable vars from Program.
     Args:
@@ -1929,9 +1839,7 @@ def get_program_persistable_vars(program: Program) -> list[Tensor]:
     return list(filter(is_persistable, program.list_vars()))
 
 
-def load_program_state(
-    model_path: str, var_list: Sequence[Tensor] | None = None
-) -> dict[str, npt.NDArray[Any]]:
+def load_program_state(model_path, var_list=None):
     """
 
     Load program state from local file
