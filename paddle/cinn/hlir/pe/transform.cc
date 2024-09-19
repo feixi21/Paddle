@@ -1628,6 +1628,9 @@ ir::Tensor ScatterAssign(const ir::Tensor& input,
       [&](common::NVGPUArch) { extern_fun_name.assign("cinn_cuda_find_int"); },
       [&](common::HygonDCUArchHIP) {
         extern_fun_name.assign("cinn_hip_find_int");
+      },
+      [&](common::HygonDCUArchSYCL) {
+        extern_fun_name.assign("cinn_sycl_find_int");
       });
 
   auto pos_axis = axis;
@@ -1736,7 +1739,8 @@ ir::Tensor ScatterAdd(const ir::Tensor& input,
             "HygonDCU now ! Please Check.\n"));
       },
       [&](common::NVGPUArch) { return ScatterAddNvHygon(); },
-      [&](common::HygonDCUArchHIP) { return ScatterAddNvHygon(); });
+      [&](common::HygonDCUArchHIP) { return ScatterAddNvHygon(); },
+      [&](common::HygonDCUArchSYCL) { return ScatterAddNvHygon(); });
 }
 
 }  // namespace pe
