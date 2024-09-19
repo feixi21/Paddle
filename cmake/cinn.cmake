@@ -104,8 +104,16 @@ if(WITH_GPU)
                                              /usr/lib /usr/lib64 REQUIRED)
 endif()
 
+
+if(CINN_WITH_SYCL)
+  message(STATUS "Compile with SYCL support")
+  set(DPCPP_DIR ${PROJECT_SOURCE_DIR}/cmake/cinn)
+  find_package(DPCPP REQUIRED CONFIG)
+  add_definitions(-DCINN_WITH_SYCL)
+endif()
 if(WITH_ROCM)
   message(STATUS "CINN Compile with ROCM support")
+  link_libraries(${ROCM_HIPRTC_LIB})
   add_definitions(-DCINN_WITH_HIP)
 endif()
 
@@ -235,7 +243,7 @@ function(gen_cinncore LINKTYPE)
   target_link_libraries(${CINNCORE_TARGET} op_dialect pir phi)
   add_dependencies(${CINNCORE_TARGET} op_dialect pir phi)
 
-  # add_dependencies(${CINNCORE_TARGET} pybind)
+  #add_dependencies(${CINNCORE_TARGET} pybind)
   target_link_libraries(${CINNCORE_TARGET} ${PYTHON_LIBRARIES})
 
   if(WITH_MKL)
@@ -267,6 +275,9 @@ function(gen_cinncore LINKTYPE)
     target_link_libraries(${CINNCORE_TARGET} cutlass)
     add_dependencies(${CINNCORE_TARGET} cutlass)
   endif()
+  if(WITH_ROCM)
+    target_link_libraries(${CINNCORE_TARGET} ${ROCM_HIPRTC_LIB})
+  endif()
 endfunction()
 
 gen_cinncore(STATIC)
@@ -279,6 +290,8 @@ if(PUBLISH_LIBS)
       "${core_includes};paddle/cinn/runtime/cuda/cinn_cuda_runtime_source.cuh")
   set(core_includes
       "${core_includes};paddle/cinn/runtime/hip/cinn_hip_runtime_source.h")
+  set(core_includes
+      "${core_includes};paddle/cinn/runtime/sycl/cinn_sycl_runtime_source.h")
   set(core_includes
       "${core_includes};paddle/common/flags.h;paddle/utils/test_macros.h")
   foreach(header ${core_includes})
