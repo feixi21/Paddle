@@ -141,6 +141,10 @@ void BindModule(py::module *m) {
                  [&](common::HygonDCUArchHIP) {
                    PADDLE_THROW(::common::errors::Unimplemented(
                        "CINN old obsolete code!"));
+                 },
+                 [&](common::HygonDCUArchSYCL) {
+                   PADDLE_THROW(::common::errors::Unimplemented(
+                       "CINN old obsolete code!"));
                  });
              self.AddFunction(func);
            })

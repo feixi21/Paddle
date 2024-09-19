@@ -33,6 +33,7 @@ using cinn::common::bfloat16;
 using cinn::common::CINNValue;
 using cinn::common::float16;
 using cinn::common::HygonDCUArchHIP;
+using cinn::common::HygonDCUArchSYCL;
 using cinn::common::NVGPUArch;
 using cinn::common::Target;
 using cinn::common::Type;
@@ -61,6 +62,9 @@ void BindTarget(py::module *m) {
            })
       .def("IsHygonDCUArchHIP", [](const common::Arch &arch) {
         return std::holds_alternative<common::HygonDCUArchHIP>(arch);
+          })
+      .def("IsHygonDCUArchSYCL", [](const common::Arch &arch) {
+        return std::holds_alternative<common::HygonDCUArchSYCL>(arch);
       });
 
   py::class_<Target> target(*m, "Target");
@@ -71,6 +75,8 @@ void BindTarget(py::module *m) {
                   []() -> common::Arch { return common::NVGPUArch{}; })
       .def_static("HygonDCUArchHIP",
                   []() -> common::Arch { return common::HygonDCUArchHIP{}; })
+      .def_static("HygonDCUArchSYCL",
+                  []() -> common::Arch { return common::HygonDCUArchSYCL{}; })
       .def_readwrite("bits", &Target::bits)
       .def_readwrite("features", &Target::features)
       .def(py::init<>())
@@ -84,6 +90,7 @@ void BindTarget(py::module *m) {
   m->def("DefaultHostTarget", &cinn::common::DefaultHostTarget)
       .def("DefaultNVGPUTarget", &cinn::common::DefaultNVGPUTarget)
       .def("DefaultHygonDcuHipTarget", &cinn::common::DefaultHygonDcuHipTarget)
+      .def("DefaultHygonDcuSyclTarget", &cinn::common::DefaultHygonDcuSyclTarget)
       .def("DefaultTarget", &cinn::common::DefaultTarget);
 
   m->def("get_target", &cinn::runtime::CurrentTarget::GetCurrentTarget);
