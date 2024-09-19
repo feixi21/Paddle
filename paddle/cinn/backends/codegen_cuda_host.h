@@ -24,14 +24,14 @@ namespace cinn {
 namespace backends {
 
 /**
- * CodeGenGpuHost takes a CINN Module with CUDA/HIP host functions and output a
+ * CodeGenCudaHost takes a CINN Module with CUDA host functions and output a
  * LLVM module.
  */
-class CodeGenGpuHost : public CodeGenHost {
+class CodeGenCudaHost : public CodeGenHost {
  public:
-  explicit CodeGenGpuHost(llvm::Module *m,
-                          llvm::IRBuilder<> *b,
-                          const std::shared_ptr<SymbolTable> &vars = nullptr)
+  explicit CodeGenCudaHost(llvm::Module *m,
+                           llvm::IRBuilder<> *b,
+                           const std::shared_ptr<SymbolTable> &vars = nullptr)
       : CodeGenHost(m, b, vars) {}
 
   // TODO(Hongqing-work): remove this after we clear some old codes.
@@ -60,14 +60,21 @@ class CodeGenGpuHost : public CodeGenHost {
           } else {
             return CodeGenHost::Visit(op);
           }
+        },
+        [&](common::HygonDCUArchSYCL) {
+          if (op->name == runtime::intrinsic::call_sycl_kernel) {
+            return LowerGPUKernelCall(op);
+          } else {
+            return CodeGenHost::Visit(op);
+          }
         });
   }
 
  private:
   /**
-   * Lower a CUDA/HIP kernel launcher.
+   * Lower a CUDA kernel launcher.
    *
-   * We launch a CUDA/HIP kernel in the following way:
+   * We launch a CUDA kernel in the following way:
    *
    * 1. a GPU function (called fn) will compiled to PTX and lower by CUDA driver
    * to a function pointer, which we store as a `void*` type global variable

@@ -19,6 +19,7 @@
 #include "paddle/cinn/ir/ir_mutator.h"
 #include "paddle/common/enforce.h"
 PD_DECLARE_bool(cinn_bucket_compile);
+
 namespace cinn {
 namespace backends {
 
@@ -221,7 +222,12 @@ void detail::CollectBucketStrategyHostFunctionVisitor::ProcessLoweredFunc(
       },
       [&](common::HygonDCUArchHIP) {
 #ifdef CINN_WITH_HIP
-        shared_mem_bytes = hip::CalculateSharedMemory(func);
+        shared_mem_bytes = CalculateSharedMemory(func);
+#endif
+      },
+      [&](common::HygonDCUArchSYCL) {
+#ifdef CINN_WITH_SYCL
+        shared_mem_bytes = CalculateSharedMemory(func);
 #endif
       });
 
@@ -243,7 +249,11 @@ void detail::CollectBucketStrategyHostFunctionVisitor::ProcessLoweredFunc(
       },
       [&](common::HygonDCUArchHIP) {
         call_kernel = runtime::intrinsic::call_hip_kernel;
-      });
+      },
+      [&](common::HygonDCUArchSYCL) {
+        call_kernel = runtime::intrinsic::call_sycl_kernel;
+      }
+      );
   ir::Expr call_extern_api =
       ir::Call::Make(Void(),
                      call_kernel.value(),
