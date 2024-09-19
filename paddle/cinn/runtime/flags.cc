@@ -55,7 +55,8 @@ PD_DEFINE_string(cinn_kernel_execution_label,
                  "Label used to measure kernel execution time");
 
 PD_DEFINE_string(cinn_tile_config_filename_label,
-                 StringFromEnv("FLAGS_cinn_tile_config_filename_label", ""),
+                 StringFromEnv("FLAGS_cinn_tile_config_filename_label",
+                               "./tile_file/"),
                  "Label used to name file of tile config database");
 
 PD_DEFINE_string(
@@ -401,6 +402,16 @@ void CheckCompileOptionImpl(cinn::common::HygonDCUArchHIP) {
   PADDLE_THROW(::common::errors::Fatal(
       "Current CINN version does not support HygonDCU, please try to "
       "recompile with -DWITH_ROCM."));
+#endif
+}
+
+void CheckCompileOptionImpl(cinn::common::HygonDCUArchSYCL) {
+#ifdef CINN_WITH_SYCL
+  // Do nothing;
+#else
+  PADDLE_THROW(::common::errors::Fatal(
+      "Current CINN version does not support HygonDCU, please try to "
+      "recompile with -DWITH_CINN."));
 #endif
 }
 

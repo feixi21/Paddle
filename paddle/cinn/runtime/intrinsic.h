@@ -1,4 +1,4 @@
-// Copyright (c) 2021 CINN Authors. All Rights Reserved.
+// Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,136 +12,177 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-#include <string>
-#include <vector>
+#include "paddle/cinn/runtime/hip/hip_backend_api.h"
+#include "paddle/cinn/runtime/hip/hip_util.h"
 
-#include "paddle/cinn/ir/buffer.h"
-#include "paddle/cinn/runtime/cinn_runtime.h"
-#include "paddle/cinn/runtime/intrinsic_types.h"
-
-/**
- * \file This file implements some runtime concepts used in analysis and
- * codegen.
- */
 namespace cinn {
-
-namespace ir {
-class Expr;
-}  // namespace ir
-
 namespace runtime {
+namespace hip {
 
-namespace intrinsic {
+HIPBackendAPI* HIPBackendAPI::Global() {
+  static auto* inst = new HIPBackendAPI();
+  return inst;
+}
 
-//! cinn_buffer_t::new_(buffer)
-static const char* buffer_create = "cinn_buffer_t::new_";
-//! cinn_buffer_t::delete_(buffer)
-static const char* buffer_destroy = "cinn_buffer_t::delete_";
+void HIPBackendAPI::set_device(int device_id) {
+  HIP_CHECK(hipSetDevice(device_id));
+}
 
-static const char* buffer_load = "cinn_buffer_load";
+int HIPBackendAPI::get_device() {
+  int device_id = 0;
+  HIP_CHECK(hipGetDevice(&device_id));
+  return device_id;
+}
 
-static const char* buffer_malloc = "cinn_buffer_malloc";
-static const char* buffer_free = "cinn_buffer_free";
-static const char* buffer_create_default = "cinn_buffer_new_default";
+int HIPBackendAPI::get_device_property(DeviceProperty device_property,
+                                       std::optional<int> device_id) {
+  int dev_index = device_id.value_or(get_device());
+  int rv = -1;
+  switch (device_property) {
+    case DeviceProperty::MaxBlockDimX: {
+      HIP_CHECK(hipDeviceGetAttribute(
+          &rv,
+          hipDeviceAttribute_t::hipDeviceAttributeMaxBlockDimX,
+          dev_index));
+      break;
+    }
+    case DeviceProperty::MaxBlockDimY: {
+      HIP_CHECK(hipDeviceGetAttribute(
+          &rv,
+          hipDeviceAttribute_t::hipDeviceAttributeMaxBlockDimY,
+          dev_index));
+      break;
+    }
+    case DeviceProperty::MaxBlockDimZ: {
+      HIP_CHECK(hipDeviceGetAttribute(
+          &rv,
+          hipDeviceAttribute_t::hipDeviceAttributeMaxBlockDimZ,
+          dev_index));
+      break;
+    }
+    case DeviceProperty::MaxGridDimX: {
+      HIP_CHECK(hipDeviceGetAttribute(
+          &rv, hipDeviceAttribute_t::hipDeviceAttributeMaxGridDimX, dev_index));
+      break;
+    }
+    case DeviceProperty::MaxGridDimY: {
+      HIP_CHECK(hipDeviceGetAttribute(
+          &rv, hipDeviceAttribute_t::hipDeviceAttributeMaxGridDimY, dev_index));
+      break;
+    }
+    case DeviceProperty::MaxGridDimZ: {
+      HIP_CHECK(hipDeviceGetAttribute(
+          &rv, hipDeviceAttribute_t::hipDeviceAttributeMaxGridDimZ, dev_index));
+      break;
+    }
+    case DeviceProperty::MaxSharedMemoryPerBlock: {
+      HIP_CHECK(hipDeviceGetAttribute(
+          &rv,
+          hipDeviceAttribute_t::hipDeviceAttributeMaxSharedMemoryPerBlock,
+          dev_index));
+      break;
+    }
+    case DeviceProperty::MaxThreadsPerBlock: {
+      HIP_CHECK(hipDeviceGetAttribute(
+          &rv,
+          hipDeviceAttribute_t::hipDeviceAttributeMaxThreadsPerBlock,
+          dev_index));
+      break;
+    }
+    case DeviceProperty::MaxThreadsPerSM: {
+      HIP_CHECK(hipDeviceGetAttribute(
+          &rv,
+          hipDeviceAttribute_t::hipDeviceAttributeMaxThreadsPerMultiProcessor,
+          dev_index));
+      break;
+    }
+    case DeviceProperty::MultiProcessorCount: {
+      HIP_CHECK(hipDeviceGetAttribute(
+          &rv,
+          hipDeviceAttribute_t::hipDeviceAttributeMultiprocessorCount,
+          dev_index));
+      break;
+    }
+    case DeviceProperty::MaxBlocksPerSM: {
+      HIP_CHECK(hipDeviceGetAttribute(
+          &rv,
+          hipDeviceAttribute_t::hipDeviceAttributeMaxThreadsPerMultiProcessor,
+          dev_index));
+      break;
+    }
+    case DeviceProperty::WarpSize: {
+      HIP_CHECK(hipDeviceGetAttribute(
+          &rv, hipDeviceAttribute_t::hipDeviceAttributeWarpSize, dev_index));
+      break;
+    }
+    default:
+      PADDLE_THROW(
+          ::common::errors::InvalidArgument("Not supported device property!"));
+  }
+  return rv;
+}
 
-static const char* buffer_get_data_handle = "cinn_buffer_get_data_handle";
-static const char* buffer_get_data_const_handle =
-    "cinn_buffer_get_data_const_handle";
+void* HIPBackendAPI::malloc(size_t numBytes) {
+  void* dev_mem = nullptr;
+  HIP_CHECK(hipMalloc(&dev_mem, numBytes));
+  return dev_mem;
+}
 
-//! Buffer load an element of some primitive type
-// @{
-static const char* buffer_load_bfloat16 = "buffer_load_bfloat16";
-static const char* buffer_load_float16 = "buffer_load_float16";
-static const char* buffer_load_float32 = "buffer_load_float32";
-static const char* buffer_load_float64 = "buffer_load_float64";
-// @}
+void HIPBackendAPI::free(void* data) { HIP_CHECK(hipFree(data)); }
 
-static const char* pod_value_ty = "cinn_pod_value_t";
+void HIPBackendAPI::memset(void* data, int value, size_t numBytes) {
+  HIP_CHECK(hipMemset(data, value, numBytes));
+}
 
-static const char* float_to_cinn_pod_value_repr = "float_to_cinn_pod_value";
-static const char* double_to_cinn_pod_value_repr = "double_to_cinn_pod_value";
-static const char* bfloat16_to_cinn_pod_value_repr =
-    "bfloat16_to_cinn_pod_value";
-static const char* float16_to_cinn_pod_value_repr = "float16_to_cinn_pod_value";
+void HIPBackendAPI::memcpy(void* dest,
+                           const void* src,
+                           size_t numBytes,
+                           MemcpyType type) {
+  hipMemcpyKind copy_kind;
+  switch (type) {
+    case MemcpyType::HostToHost:
+      copy_kind = hipMemcpyHostToHost;
+      break;
+    case MemcpyType::HostToDevice:
+      copy_kind = hipMemcpyHostToDevice;
+      break;
+    case MemcpyType::DeviceToHost:
+      copy_kind = hipMemcpyDeviceToHost;
+      break;
+    case MemcpyType::DeviceToDevice:
+      copy_kind = hipMemcpyDeviceToDevice;
+      break;
+  }
+  HIP_CHECK(hipMemcpy(dest, src, numBytes, copy_kind));
+}
 
-static const char* bool_to_cinn_pod_value_repr = "bool_to_cinn_pod_value";
+void HIPBackendAPI::device_sync() { HIP_CHECK(hipDeviceSynchronize()); }
 
-static const char* int8_to_cinn_pod_value_repr = "int8_to_cinn_pod_value";
-static const char* int16_to_cinn_pod_value_repr = "int16_to_cinn_pod_value";
-static const char* int32_to_cinn_pod_value_repr = "int32_to_cinn_pod_value";
-static const char* int64_to_cinn_pod_value_repr = "int64_to_cinn_pod_value";
+void HIPBackendAPI::stream_sync(void* stream) {
+  HIP_CHECK(hipStreamSynchronize(static_cast<hipStream_t>(stream)));
+}
 
-static const char* uint8_to_cinn_pod_value_repr = "uint8_to_cinn_pod_value";
-static const char* uint16_to_cinn_pod_value_repr = "uint16_to_cinn_pod_value";
-static const char* uint32_to_cinn_pod_value_repr = "uint32_to_cinn_pod_value";
-static const char* uint64_to_cinn_pod_value_repr = "uint64_to_cinn_pod_value";
+std::array<int, 3> HIPBackendAPI::get_max_grid_dims(
+    std::optional<int> device_id) {
+  std::array<int, 3> kMaxGridDims;
+  kMaxGridDims[0] = get_device_property(DeviceProperty::MaxGridDimX, device_id);
+  kMaxGridDims[1] = get_device_property(DeviceProperty::MaxGridDimY, device_id);
+  kMaxGridDims[2] = get_device_property(DeviceProperty::MaxGridDimZ, device_id);
+  return kMaxGridDims;
+}
 
-static const char* buffer_p_to_cinn_pod_value_repr =
-    "buffer_p_to_cinn_pod_value";
+std::array<int, 3> HIPBackendAPI::get_max_block_dims(
+    std::optional<int> device_id) {
+  std::array<int, 3> kMaxBlockDims;
+  kMaxBlockDims[0] =
+      get_device_property(DeviceProperty::MaxBlockDimX, device_id);
+  kMaxBlockDims[1] =
+      get_device_property(DeviceProperty::MaxBlockDimY, device_id);
+  kMaxBlockDims[2] =
+      get_device_property(DeviceProperty::MaxBlockDimZ, device_id);
+  return kMaxBlockDims;
+}
 
-static const char* pod_value_to_buffer_p = "cinn_pod_value_to_buffer_p";
-static const char* pod_value_to_bool = "cinn_pod_value_to_bool";
-
-static const char* pod_value_to_int8 = "cinn_pod_value_to_int8";
-static const char* pod_value_to_int16 = "cinn_pod_value_to_int16";
-static const char* pod_value_to_int32 = "cinn_pod_value_to_int32";
-static const char* pod_value_to_int64 = "cinn_pod_value_to_int64";
-
-static const char* pod_value_to_uint8 = "cinn_pod_value_to_uint8";
-static const char* pod_value_to_uint16 = "cinn_pod_value_to_uint16";
-static const char* pod_value_to_uint32 = "cinn_pod_value_to_uint32";
-static const char* pod_value_to_uint64 = "cinn_pod_value_to_uint64";
-
-static const char* pod_value_to_float = "cinn_pod_value_to_float";
-static const char* pod_value_to_double = "cinn_pod_value_to_double";
-static const char* pod_value_to_bfloat16 = "cinn_pod_value_to_bfloat16";
-static const char* pod_value_to_float16 = "cinn_pod_value_to_float16";
-
-static const char* pod_value_to_void_p = "cinn_pod_value_to_void_p";
-
-static const char* print_debug_args_repr = "cinn_print_debug_args";
-
-static const char* call_cuda_kernel = "cinn_call_cuda_kernel";
-
-static const char* call_hip_kernel = "cinn_call_hip_kernel";
-
-static const char* get_value_in_cuda_kernel_args =
-    "cinn_get_value_in_cuda_kernel_args";
-
-static const char* infer_shape_set_value = "infer_shape_set_value";
-
-static const char* pod_values_to_array_repr = "pod_values_to_array";
-
-static const char* get_address_repr = "get_address";
-
-static const char* args_construct_repr = "cinn_args_construct";
-
-static const char* builtin_intrin_repr = "cinn_builtin_intrin";
-
-//! Name of the helper intrinsic used to display debug string.
-static const char* debug_log_repr = "cinn_print_debug_string";
-
-static const char* cuda_sync_threads = "__syncthreads";
-
-static const char* parallel_launch = "cinn_backend_parallel_launch";
-
-}  // namespace intrinsic
-
-/**
- * Call an intrinsic function.
- * @param type Return type of the function.
- * @param fn_name Name of the function.
- * @param args The arguments for the function.
- * @return The Call node.
- */
-Expr IntrinsicCall(Type type,
-                   const std::string& fn_name,
-                   const std::vector<Expr>& args,
-                   const std::vector<Expr>& write_args = {});
-
-//! Convert the Type in compile time to runtime type.
-cinn_type_t ToRuntimeType(Type type);
-
+}  // namespace hip
 }  // namespace runtime
 }  // namespace cinn
