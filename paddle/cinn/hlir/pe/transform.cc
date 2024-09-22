@@ -868,6 +868,14 @@ std::vector<Tensor> MulBaseCallImpl(common::HygonDCUArchHIP,
   MulBaseCallImplNvHygon(A, B, name, target);
 }
 
+std::vector<Tensor> MulBaseCallImpl(common::HygonDCUArchSYCL,
+                                    const Tensor& A,
+                                    const Tensor& B,
+                                    const std::string& name,
+                                    const cinn::common::Target& target) {
+  MulBaseCallImplNvHygon(A, B, name, target);
+}
+
 std::vector<Tensor> MulBaseCall(const Tensor& A,
                                 const Tensor& B,
                                 const std::string& name,

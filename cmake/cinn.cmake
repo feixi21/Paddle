@@ -245,6 +245,7 @@ function(gen_cinncore LINKTYPE)
 
   #add_dependencies(${CINNCORE_TARGET} pybind)
   target_link_libraries(${CINNCORE_TARGET} ${PYTHON_LIBRARIES})
+  link_libraries(${PYTHON_LIBRARIES})
 
   if(WITH_MKL)
     target_link_libraries(${CINNCORE_TARGET} cinn_mklml)

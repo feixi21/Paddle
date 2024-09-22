@@ -20,6 +20,7 @@ import unittest
 
 import numpy as np
 
+import paddle
 from paddle import base
 from paddle.cinn.common import DefaultHostTarget, DefaultNVGPUTarget
 from paddle.cinn.frontend import Interpreter

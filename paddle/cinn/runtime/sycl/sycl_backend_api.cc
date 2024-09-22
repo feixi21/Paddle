@@ -120,6 +120,30 @@ int SYCLBackendAPI::get_device_property(
   int rv = -1;
 
   switch (device_property) {
+    case DeviceProperty::MaxBlockDimX: {
+      rv = 101;
+      break;
+    }
+    case DeviceProperty::MaxBlockDimY: {
+      rv = 101;
+      break;
+    }
+    case DeviceProperty::MaxBlockDimZ: {
+      rv = 101;
+      break;
+    }
+    case DeviceProperty::MaxGridDimX: {
+      rv = 101;
+      break;
+    }
+    case DeviceProperty::MaxGridDimY: {
+      rv = 101;
+      break;
+    }
+    case DeviceProperty::MaxGridDimZ: {
+      rv = 101;
+      break;
+    }
     case DeviceProperty::MaxSharedMemoryPerBlock: {
       rv = this->devices[index].get_info<::sycl::info::device::local_mem_size>();
       break;

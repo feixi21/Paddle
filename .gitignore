@@ -1,3 +1,6 @@
+/paddle/cinn/backends/sycl/other/
+
+paddle/cinn/hlir/dialect/operator/ir/cinn_op.cc
 paddle/fluid/operators/distributed/send_recv.proto
 paddle/fluid/API.spec
 paddle/fluid/API_DEV.spec
@@ -45,7 +48,7 @@ build_doc/
 *.tmp
 *.pyc
 *.log
-
+*.tar.gz*
 .vscode
 .idea
 .project
@@ -60,6 +63,7 @@ Makefile
 third_party/
 *~
 bazel-*
+out.*
 
 
 build_*

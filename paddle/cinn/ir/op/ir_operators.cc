@@ -126,7 +126,7 @@ Expr BitwiseOrCallImpl(common::HygonDCUArchHIP,
   return lang::CallExtern(func_name, {a, b}, {{"vectorizable", false}});
 }
 
-Expr BitwiseAndCallImpl(common::HygonDCUArchSYCL,
+Expr BitwiseOrCallImpl(common::HygonDCUArchSYCL,
                         const Target& target,
                         Expr a,
                         Expr b) {

@@ -31,29 +31,54 @@ namespace cinn {
 namespace backends {
 namespace Sycl {
 
-const std::string &CodeGenSyclDevice::GetSourceHeader() {
-  static std::string source_header =
-      R"(#include <sycl/sycl.hpp>
+const std::string CodeGenSyclDevice::source_header_ =
+    R"(#include <sycl/sycl.hpp>
 #include "cinn_sycl_runtime_source.h"
 typedef sycl::half float16;
 )";
-  return source_header;
-}
 
-std::string CodeGenSyclDevice::Compile(const ir::Module &module, bool use_rtc) {
-  for_syclrtc_ = use_rtc;
+std::string CodeGenSyclDevice::Compile(const ir::Module &module, bool for_syclrtc) {
+  for_syclrtc_ = for_syclrtc;
   auto source = Compile(module, OutputKind::CImpl);
-
   return source;
 }
 
-CodeGenSyclDevice::CodeGenSyclDevice(Target target) : CodeGenGpuDev(target) {}
+std::string CodeGenSyclDevice::Compile(const ir::Module &module,
+                                     CodeGenC::OutputKind output_kind) {
+  if (output_kind == OutputKind::CHeader) {
+    GenerateHeaderFile(module);
+  } else if (output_kind == OutputKind::CImpl) {
+    PrintIncludes();
 
-void CodeGenSyclDevice::PrintIncludes() { str_ += GetSourceHeader(); }
+    if (for_syclrtc_) {
+      str_ += "#ifdef __cplusplus\n";
+      str_ += "extern \"C\" {\n";
+      str_ += "#endif\n";
+    }
 
-void CodeGenSyclDevice::Compile(const ir::Module &module,
-                              const Outputs &outputs) {
-  PADDLE_THROW(::common::errors::Fatal("CINN_SYCL_codegen_NOT_IMPLEMENTED"));
+    PrintBuiltinCodes();
+
+    for (auto &func : module.functions()) {
+      Compile(func);
+    }
+  } else {
+    LOG(FATAL) << "Not supported OutputKind";
+  }
+
+  if (for_syclrtc_) {
+    str_ += "\n#ifdef __cplusplus\n";
+    str_ += "}\n";
+    str_ += "#endif\n";
+  }
+  return str_;
+}
+
+void CodeGenSyclDevice::Compile(const ir::Module &module, const Outputs &outputs) {
+  LOG(FATAL) << "CINN_SYCL_codegen_NOT_IMPLEMENTED";
+}
+
+void CodeGenSyclDevice::Compile(const ir::LoweredFunc &func) {
+  IrPrinter::Visit(Expr(func));
 }
 
 void CodeGenSyclDevice::Visit(const ir::_LoweredFunc_ *op) {
@@ -64,9 +89,7 @@ void CodeGenSyclDevice::Visit(const ir::_LoweredFunc_ *op) {
   str_ += "// CodeGenSYCL: NOTE: Auto-generated packed function\n";
   str_ += "void ";
   str_ += op->name;
-  str_ +=
-      "(sycl::queue &Q, sycl::range<3> dimGrid, sycl::range<3> dimBlock, "
-      "void** void_args) {\n";
+  str_ += "(sycl::queue &Q, sycl::range<3> dimGrid, sycl::range<3> dimBlock, void** void_args) {\n";
   IncIndent();
   // read void_args
   PrintFunctionDeclaration(op);
@@ -74,9 +97,7 @@ void CodeGenSyclDevice::Visit(const ir::_LoweredFunc_ *op) {
   str_ += "Q.submit([&](sycl::handler &h) {\n";
   IncIndent();
   DoIndent();
-  str_ += "h.parallel_for<class " + GenerateKernelName(op) +
-          ">(sycl::nd_range<3>(dimGrid * dimBlock, dimBlock), "
-          "[=](sycl::nd_item<3> item) "
+  str_ += "h.parallel_for<class " + GenerateKernelName(op) + ">(sycl::nd_range<3>(dimGrid * dimBlock, dimBlock), [=](sycl::nd_item<3> item) "
           "[[intel::kernel_args_restrict]]";
   if (op->cuda_axis_info.valid()) {
     bool has_symbol_in_thread_num = false;
@@ -155,17 +176,17 @@ void CodeGenSyclDevice::PrintFunctionBody(const ir::_LoweredFunc_ *op) {
   std::vector<Expr> new_body;
 
   auto alloca_temp_buffers = op->PrepareAllocTempBufferExprs();
-  auto temp_buffer_alias = GenerateBufferAliasExprs(op, op->temp_bufs);
-  auto alis_var_exprs = op->CudaAliasVarExprs();
+  auto temp_buffer_alias   = GenerateBufferAliasExprs(op, op->temp_bufs);
+  auto alis_var_exprs      = op->CudaAliasVarExprs();
 
-#define APPEND_TO_NEW_BODY(field__) \
-  new_body.insert(std::end(new_body), std::begin(field__), std::end(field__));
+#define APPEND_TO_NEW_BODY(field__) new_body.insert(std::end(new_body), std::begin(field__), std::end(field__));
   APPEND_TO_NEW_BODY(alloca_temp_buffers)
   APPEND_TO_NEW_BODY(temp_buffer_alias)
   APPEND_TO_NEW_BODY(alis_var_exprs)
 
   new_body.push_back(op->body);
 
+  //将new_body转变为ir::Block
   Expr func_body = ir::Block::Make(new_body);
 
   optim::SimplifyBlocks(&func_body);
@@ -177,6 +198,7 @@ void CodeGenSyclDevice::PrintFunctionBody(const ir::_LoweredFunc_ *op) {
 }
 
 void CodeGenSyclDevice::PrintFunctionDeclaration(const ir::_LoweredFunc_ *op) {
+
   for (int i = 0; i < op->args.size(); i++) {
     DoIndent();
     auto &arg = op->args[i];
@@ -186,7 +208,7 @@ void CodeGenSyclDevice::PrintFunctionDeclaration(const ir::_LoweredFunc_ *op) {
       if (arg.is_input()) str_ += "const ";
       str_ += GetTypeRepr(arg.buffer_arg()->dtype);
       str_ += "* ";
-      // str_ += kCKeywordRestrict;
+      //str_ += kCKeywordRestrict;
       str_ += " ";
       str_ += ir::BufferGetTensorName(arg.buffer_arg().As<ir::_Buffer_>());
       str_ += " = (";
@@ -194,7 +216,7 @@ void CodeGenSyclDevice::PrintFunctionDeclaration(const ir::_LoweredFunc_ *op) {
       str_ += "* ";
     } else if (arg.is_var()) {
       if (arg.var_arg()->type().is_cpp_handle()) {
-        // str_ += kCKeywordRestrict;
+        //str_ += kCKeywordRestrict;
       }
       str_ += GetTypeRepr(arg.type());
       str_ += " ";
@@ -210,45 +232,8 @@ void CodeGenSyclDevice::PrintFunctionDeclaration(const ir::_LoweredFunc_ *op) {
   }
 }
 
-std::string CodeGenSyclDevice::Compile(const ir::Module &module,
-                                     CodeGenC::OutputKind output_kind) {
-  if (output_kind == OutputKind::CHeader) {
-    GenerateHeaderFile(module);
-  } else if (output_kind == OutputKind::CImpl) {
-    PrintIncludes();
-
-    if (for_syclrtc_) {
-      str_ += "#ifdef __cplusplus\n";
-      str_ += "extern \"C\" {\n";
-      str_ += "#endif\n";
-    }
-
-    PrintBuiltinCodes();
-
-    for (auto &func : module.functions()) {
-      Compile(func);
-    }
-  } else {
-    PADDLE_THROW(::common::errors::Fatal("Not supported OutputKind"));
-  }
-
-  if (for_syclrtc_) {
-    str_ += "\n#ifdef __cplusplus\n";
-    str_ += "}\n";
-    str_ += "#endif\n";
-  }
-  return str_;
-}
-
-void Compile(const ir::LoweredFunc& func) {
-    CodeGenGpuDev::Compile(func);
-}
-
 void CodeGenSyclDevice::PrintTempBufferCreation(const ir::Buffer &buffer) {
-  PADDLE_ENFORCE_NE(buffer->type(),
-                    Void(),
-                    ::common::errors::InvalidArgument(
-                        "Buffer type cannot be void in CodeGenSYCL_Dev"));
+  CHECK_NE(buffer->type(), Void());
   auto print_gpu_memory = [&](const std::string &mark) {
     str_ += mark;
     str_ += GetTypeRepr(buffer->dtype);
@@ -266,36 +251,34 @@ void CodeGenSyclDevice::PrintTempBufferCreation(const ir::Buffer &buffer) {
     str_ += " ]";
   };
   switch (buffer->memory_type) {
-    case ir::MemoryType::GPUShared: {
-      str_ += "auto ";
-      str_ += buffer->name;
-      str_ += " = *sycl::group_local_memory<";
-      str_ += GetTypeRepr(buffer->dtype);
-      str_ += "[ ";
-      Expr buffer_size(1);
-      for (int i = 0; i < buffer->shape.size(); i++) {
-        buffer_size = buffer_size * buffer->shape[i];
+    case ir::MemoryType::GPUShared:
+      {
+        str_ += "auto ";
+        str_ += buffer->name;
+        str_ += " = *sycl::ext::oneapi::group_local_memory<";
+        str_ += GetTypeRepr(buffer->dtype);
+        str_ += "[ ";
+        Expr buffer_size(1);
+        for (int i = 0; i < buffer->shape.size(); i++) {
+          buffer_size = buffer_size * buffer->shape[i];
+        }
+        optim::Simplify(&buffer_size);
+        IrPrinter::Visit(buffer_size);
+        str_ += " ]>(item.get_group())";
+        break;
       }
-      optim::Simplify(&buffer_size);
-      IrPrinter::Visit(buffer_size);
-      str_ += " ]>(item.get_group())";
-      break;
-    }
 
     case ir::MemoryType::GPULocal:
       print_gpu_memory("");
       break;
 
     default:
-      PADDLE_THROW(::common::errors::Fatal(
-          "SYCL device codegen not support memory %s, %s",
-          buffer->name,
-          buffer->memory_type));
+      LOG(FATAL) << "SYCL device codegen not support memory " << buffer->name
+                 << ", type " << buffer->memory_type;
   }
 }
 
 void CodeGenSyclDevice::Visit(const ir::Call *op) {
-  VLOG(3) << "CodeGenSYCL visiting call op: " << op->name;
   if (op->name == "__syncthreads") {
     str_ += "sycl::group_barrier(item.get_group())";
     return;
@@ -342,19 +325,27 @@ void CodeGenSyclDevice::Visit(const ir::Call *op) {
   // sycl need parameter nd_item
   if ((op->name.find("cinn_block_reduce") != std::string::npos) ||
       (op->name.find("cinn_warp_reduce") != std::string::npos)) {
-    str_ += ", item";
+    str_ +=  ", item";
   }
 
   str_ += ")";
 }
 
-std::string CodeGenSyclDevice::GenerateKernelName(const ir::_LoweredFunc_ *op) {
+std::string CodeGenSyclDevice::GenerateKernelName(const ir::_LoweredFunc_ *op){
   std::string kernel_name = "space" + std::to_string(NUM::getNum());
   kernel_name += "_";
   kernel_name += op->name;
   return kernel_name;
 }
 
-}  // namespace sycl
+const std::string &CodeGenSyclDevice::GetSourceHeader() { 
+    return source_header_; 
+}
+
+CodeGenSyclDevice::CodeGenSyclDevice(Target target) : CodeGenGpuDev(target) {}
+
+void CodeGenSyclDevice::PrintIncludes() { str_ += GetSourceHeader(); }
+
+}  // namespace Sycl
 }  // namespace backends
 }  // namespace cinn
