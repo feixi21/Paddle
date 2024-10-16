@@ -243,6 +243,7 @@ std::string Target::arch_str() const {
 
 std::string Target::device_name_str() const {
   int device_idx = 0;
+  #ifdef CINN_WITH_CUDA
   cudaError_t result = cudaGetDevice(&device_idx);
   if (result != cudaSuccess) {
     // Call cudaGetLastError() to clear the error bit
@@ -265,6 +266,7 @@ std::string Target::device_name_str() const {
   std::string device_name = properties.name;
   device_name = std::regex_replace(device_name, std::regex(" "), "_");
   return std::regex_replace(device_name, std::regex("-"), "_");
+  #endif
 }
 
 std::ostream &operator<<(std::ostream &os, const Target &target) {

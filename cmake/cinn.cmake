@@ -107,6 +107,7 @@ endif()
 if(WITH_ROCM)
   message(STATUS "CINN Compile with ROCM support")
   add_definitions(-DCINN_WITH_HIP)
+  link_libraries(${ROCM_HIPRTC_LIB})
 endif()
 
 set(cinnapi_src CACHE INTERNAL "" FORCE)
@@ -237,6 +238,7 @@ function(gen_cinncore LINKTYPE)
 
   # add_dependencies(${CINNCORE_TARGET} pybind)
   target_link_libraries(${CINNCORE_TARGET} ${PYTHON_LIBRARIES})
+  link_libraries(${PYTHON_LIBRARIES})
 
   if(WITH_MKL)
     target_link_libraries(${CINNCORE_TARGET} cinn_mklml)
