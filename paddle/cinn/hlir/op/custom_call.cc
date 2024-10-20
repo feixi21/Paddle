@@ -132,6 +132,11 @@ std::shared_ptr<OpStrategy> StrategyForCustomCall(
           ir::Var kernel_stream(KERNEL_STREAM, type_of<void *>());
           host_args.push_back(kernel_stream);
           arguments.emplace_back(kernel_stream, ir::Argument::IO::kOutput);
+        },
+        [&](common::HygonDCUArchSYCL) {
+          ir::Var kernel_stream(KERNEL_STREAM, type_of<void *>());
+          host_args.push_back(kernel_stream);
+          arguments.emplace_back(kernel_stream, ir::Argument::IO::kOutput);
         });
     auto call_extern_api = ir::Call::Make(Void(),
                                           custom_call_api,

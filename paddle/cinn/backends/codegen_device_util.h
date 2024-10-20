@@ -139,6 +139,9 @@ struct CollectHostFunctionVisitor : public ir::IRMutator<> {
           codegen_dev.Compile(ir::LoweredFunc(func));
           shared_mem_bytes = codegen_dev.GetDynSharedMemOffset();
 #endif
+        },
+        [&](common::HygonDCUArchSYCL) {
+
         });
 
     VLOG(6) << "Add a call node for func->name " << func->name << "\n"
@@ -160,6 +163,9 @@ struct CollectHostFunctionVisitor : public ir::IRMutator<> {
         },
         [&](common::HygonDCUArchHIP) {
           call_kernel = runtime::intrinsic::call_hip_kernel;
+        },
+        [&](common::HygonDCUArchSYCL) {
+          call_kernel = runtime::intrinsic::call_sycl_kernel;
         });
 
     auto call_extern_api =

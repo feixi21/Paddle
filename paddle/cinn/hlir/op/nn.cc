@@ -400,6 +400,10 @@ std::shared_ptr<OpStrategy> StrategyForConv2d(
                         [&](common::HygonDCUArchHIP) {
                           PADDLE_THROW(::common::errors::Unimplemented(
                               "CINN old obsolete code!"));
+                        },
+                        [&](common::HygonDCUArchSYCL) {
+                          PADDLE_THROW(::common::errors::Unimplemented(
+                              "CINN old obsolete code!"));
                         });
     } else if (data_format == "NHWC") {
       // A is input: [N, H, W, C], B is filter: [C_out, C_in/group,
@@ -500,6 +504,10 @@ std::shared_ptr<OpStrategy> StrategyForConv2d(
           }
         },
         [&](common::HygonDCUArchHIP) {
+          PADDLE_THROW(
+              ::common::errors::Unimplemented("CINN old obsolete code!"));
+        },
+        [&](common::HygonDCUArchSYCL) {
           PADDLE_THROW(
               ::common::errors::Unimplemented("CINN old obsolete code!"));
         });
@@ -618,6 +626,10 @@ std::shared_ptr<OpStrategy> StrategyForDepthwiseConv2d(
                         [&](common::HygonDCUArchHIP) {
                           PADDLE_THROW(::common::errors::Unimplemented(
                               "CINN old obsolete code!"));
+                        },
+                        [&](common::HygonDCUArchSYCL) {
+                          PADDLE_THROW(::common::errors::Unimplemented(
+                              "CINN old obsolete code!"));
                         });
     } else if (data_format == "NHWC") {
       out = pe::Depthwise_Conv2d_NHWC(A.as_tensor_ref(),
@@ -677,6 +689,10 @@ std::shared_ptr<OpStrategy> StrategyForDepthwiseConv2d(
                         pe::IRCudaScheduleDepthwiseConv(ir_sch, vec_tensor);
                       },
                       [&](common::HygonDCUArchHIP) {
+                        PADDLE_THROW(::common::errors::Unimplemented(
+                            "CINN old obsolete code!"));
+                      },
+                      [&](common::HygonDCUArchSYCL) {
                         PADDLE_THROW(::common::errors::Unimplemented(
                             "CINN old obsolete code!"));
                       });
@@ -987,7 +1003,8 @@ std::shared_ptr<OpStrategy> StrategyForPool1d(
                         // Do nothing.
                       },
                       [&](common::NVGPUArch) { schedule_nv_hygon(); },
-                      [&](common::HygonDCUArchHIP) { schedule_nv_hygon(); });
+                      [&](common::HygonDCUArchHIP) { schedule_nv_hygon(); },
+                      [&](common::HygonDCUArchSYCL) { schedule_nv_hygon(); });
     std::vector<CINNValue> res{CINNValue(ir_sch.GetModule().GetExprs().at(0))};
     *ret = CINNValuePack{res};
   });
@@ -1173,6 +1190,9 @@ std::shared_ptr<OpStrategy> StrategyForPool2d(
         [&](common::NVGPUArch) { pe::IRGlobalPoolScheduleGPU(ir_sch, target); },
         [&](common::HygonDCUArchHIP) {
           pe::IRGlobalPoolScheduleGPU(ir_sch, target);
+        },
+        [&](common::HygonDCUArchSYCL) {
+          pe::IRGlobalPoolScheduleGPU(ir_sch, target);
         });
     std::vector<CINNValue> res{CINNValue(ir_sch.GetModule().GetExprs().at(0))};
     *ret = CINNValuePack{res};
@@ -1280,6 +1300,9 @@ std::shared_ptr<OpStrategy> StrategyForPool2d(
                       },
                       [&](common::HygonDCUArchHIP) {
                         pe::IRPoolScheduleGPU(ir_sch, target, arg_pack_size);
+                      },
+                      [&](common::HygonDCUArchSYCL) {
+                        pe::IRPoolScheduleGPU(ir_sch, target, arg_pack_size);
                       });
     std::vector<CINNValue> res{CINNValue(ir_sch.GetModule().GetExprs().at(0))};
     *ret = CINNValuePack{res};
@@ -1306,6 +1329,10 @@ std::shared_ptr<OpStrategy> StrategyForPool2d(
                     [&](common::HygonDCUArchHIP) {
                       PADDLE_THROW(::common::errors::Unimplemented(
                           "CINN todo: new hardware HygonDCUArchHIP"));
+                    },
+                    [&](common::HygonDCUArchSYCL) {
+                      PADDLE_THROW(::common::errors::Unimplemented(
+                          "CINN todo: new hardware HygonDCUArchSYCL"));
                     });
   strategy->AddImpl(pool2d_compute, pool2d_schedule, "strategy.pool2d.x86", 1);
   if (use_warp_reduce) {
@@ -1494,6 +1521,21 @@ std::shared_ptr<OpStrategy> StrategyForPool3d(
           loops = ir_sch.GetLoops(Out.as_tensor()->name);
           ir_sch.Bind(loops[0], "blockIdx.x");
           ir_sch.Bind(loops[1], "threadIdx.x");
+        },
+        [&](common::HygonDCUArchSYCL) {
+          PADDLE_ENFORCE_EQ(vec_tensor.empty(),
+                            false,
+                            ::common::errors::NotFound(
+                                "The vec_tensor is empty! Please check."));
+          Expr Out = vec_tensor[0];
+          PADDLE_ENFORCE(Out.as_tensor(),
+                         ::common::errors::InvalidArgument(
+                             "Datatype error! Output is not a tensor."));
+          auto loops = ir_sch.GetLoops(Out.as_tensor()->name);
+          ir_sch.Split(loops[1], {-1, 2});
+          loops = ir_sch.GetLoops(Out.as_tensor()->name);
+          ir_sch.Bind(loops[0], "blockIdx.x");
+          ir_sch.Bind(loops[1], "threadIdx.x");
         });
     std::vector<CINNValue> res{CINNValue(ir_sch.GetModule().GetExprs().at(0))};
     *ret = CINNValuePack{res};
@@ -1650,7 +1692,8 @@ std::shared_ptr<OpStrategy> StrategyForSoftmax(
                       },
                       [&](common::ARMArch) { CINN_NOT_IMPLEMENTED; },
                       [&](common::NVGPUArch) { schedule_nv_hygon(); },
-                      [&](common::HygonDCUArchHIP) { schedule_nv_hygon(); });
+                      [&](common::HygonDCUArchHIP) { schedule_nv_hygon(); },
+                      [&](common::HygonDCUArchSYCL) { schedule_nv_hygon(); });
   });
 
   auto strategy = std::make_shared<framework::OpStrategy>();
