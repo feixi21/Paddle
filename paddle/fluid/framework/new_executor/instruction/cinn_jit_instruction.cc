@@ -14,6 +14,7 @@
 
 #include "paddle/fluid/framework/new_executor/instruction/cinn_jit_instruction.h"
 
+#include "paddle/cinn/runtime/cuda/cuda_util.h"
 #include "paddle/cinn/hlir/dialect/runtime/ir/jit_kernel_op.h"
 #include "paddle/cinn/hlir/dialect/runtime/ir/runtime_dialect.h"
 #include "paddle/cinn/hlir/framework/pir_compiler.h"

@@ -25,6 +25,9 @@
 #ifdef CINN_WITH_HIP
 #include "paddle/cinn/backends/hip/codegen_hip_dev.h"
 #endif
+#ifdef CINN_WITH_SYCL
+#include "paddle/cinn/backends/sycl/codegen_sycl_dev.h"
+#endif
 #include "paddle/cinn/cinn.h"
 #include "paddle/cinn/ir/ir.h"
 #include "paddle/cinn/ir/ir_mutator.h"
@@ -139,6 +142,15 @@ struct CollectHostFunctionVisitor : public ir::IRMutator<> {
           codegen_dev.Compile(ir::LoweredFunc(func));
           shared_mem_bytes = codegen_dev.GetDynSharedMemOffset();
 #endif
+        },
+        [&](common::HygonDCUArchSYCL) {
+#ifdef CINN_WITH_SYCL
+          Sycl::CodeGenSyclDevice codegen_dev(
+              cinn::common::DefaultHygonDcuSyclTarget());
+          codegen_dev.Compile(ir::LoweredFunc(func));
+          //codegen_dev.CodeGenGpuDev::Compile(ir::LoweredFunc(func));
+          shared_mem_bytes = codegen_dev.GetDynSharedMemOffset();          
+#endif
         });
 
     VLOG(6) << "Add a call node for func->name " << func->name << "\n"
@@ -160,7 +172,11 @@ struct CollectHostFunctionVisitor : public ir::IRMutator<> {
         },
         [&](common::HygonDCUArchHIP) {
           call_kernel = runtime::intrinsic::call_hip_kernel;
-        });
+        },
+        [&](common::HygonDCUArchSYCL) {
+          call_kernel = runtime::intrinsic::call_sycl_kernel;
+        }
+        );
 
     auto call_extern_api =
         ir::Call::Make(Void(),

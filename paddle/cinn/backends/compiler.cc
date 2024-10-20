@@ -35,6 +35,11 @@
 #include "paddle/cinn/backends/hip/compiler_hip.h"
 #include "paddle/cinn/runtime/hip/hip_module.h"
 #endif
+#ifdef CINN_WITH_SYCL
+#include "paddle/cinn/backends/sycl/codegen_sycl_dev.h"
+#include "paddle/cinn/backends/sycl/compiler_sycl.h"
+#include "paddle/cinn/runtime/sycl/sycl_module.h"
+#endif
 #include "paddle/cinn/adt/adt.h"
 
 PD_DECLARE_string(cinn_source_code_save_path);
@@ -238,7 +243,9 @@ void Compiler::Build(const Module& module, const std::string& code) {
       [&](common::X86Arch) { CompileX86Module(module); },
       [&](common::ARMArch) { CINN_NOT_IMPLEMENTED; },
       [&](common::NVGPUArch) { CompileCudaModule(module, code); },
-      [&](common::HygonDCUArchHIP) { CompileHipModule(module, code); });
+      [&](common::HygonDCUArchHIP) { CompileHipModule(module, code); },
+      [&](common::HygonDCUArchSYCL) { CompileSyclModule(module, code); }
+      );
 }
 
 void Compiler::AppendCX86(const Module& module) {
@@ -286,6 +293,19 @@ std::string Compiler::GetSourceCode(const ir::Module& module) {
 #else
         CINN_NOT_IMPLEMENTED
 #endif
+      },
+      [&](common::HygonDCUArchSYCL) -> std::string {
+#ifdef CINN_WITH_SYCL
+        auto _host_module_device_module_ =
+            SplitDeviceAndHostModule(module);  // NOLINT
+        auto& host_module = std::get<0>(_host_module_device_module_);
+        auto& device_module = std::get<1>(_host_module_device_module_);
+        Sycl::CodeGenSyclDevice codegen(target_);
+        auto source_code = codegen.Compile(device_module);
+        return source_code;
+#else
+        CINN_NOT_IMPLEMENTED
+#endif
       });
 }
 
@@ -295,7 +315,8 @@ void Compiler::BuildDefault(const Module& module) {
       [&](common::X86Arch) { CompileX86Module(module); },
       [&](common::ARMArch) { CINN_NOT_IMPLEMENTED; },
       [&](common::NVGPUArch) { CompileCudaModule(module); },
-      [&](common::HygonDCUArchHIP) { CompileHipModule(module); });
+      [&](common::HygonDCUArchHIP) { CompileHipModule(module); },
+      [&](common::HygonDCUArchSYCL) { CompileSyclModule(module); });
 }
 
 namespace {
@@ -322,7 +343,9 @@ void Compiler::RegisterDeviceModuleSymbol() {
       [&](common::X86Arch) { return; },
       [&](common::ARMArch) { return; },
       [&](common::NVGPUArch) { RegisterCudaModuleSymbol(); },
-      [&](common::HygonDCUArchHIP) { RegisterHipModuleSymbol(); });
+      [&](common::HygonDCUArchHIP) { RegisterHipModuleSymbol(); },
+      [&](common::HygonDCUArchSYCL) { RegisterSyclModuleSymbol(); }
+      );
 }
 
 void Compiler::RegisterCudaModuleSymbol() {
@@ -330,10 +353,10 @@ void Compiler::RegisterCudaModuleSymbol() {
   nvrtc::Compiler compiler;
   std::string source_code = CodeGenCudaDev::GetSourceHeader() + device_fn_code_;
   auto ptx = compiler(source_code);
-  PADDLE_ENFORCE_EQ(!ptx.empty(),
-                    true,
-                    ::common::errors::InvalidArgument(
-                        "Compile PTX failed from source code\n"));
+  PADDLE_ENFORCE_EQ(
+      !ptx.empty(),
+      true,
+      phi::errors::InvalidArgument("Compile PTX failed from source code\n"));
   using runtime::cuda::CUDAModule;
   cuda_module_.reset(new CUDAModule(ptx,
                                     compiler.compile_to_cubin()
@@ -343,9 +366,9 @@ void Compiler::RegisterCudaModuleSymbol() {
   RuntimeSymbols symbols;
   for (const auto& kernel_fn_name : device_fn_name_) {
     auto fn_kernel = cuda_module_->GetFunction(kernel_fn_name);
-    PADDLE_ENFORCE_NOT_NULL(fn_kernel,
-                            ::common::errors::InvalidArgument(
-                                "Fail to get CUfunction kernel_fn_name"));
+    PADDLE_ENFORCE_NOT_NULL(
+        fn_kernel,
+        phi::errors::InvalidArgument("Fail to get CUfunction kernel_fn_name"));
     fn_ptr_.push_back(reinterpret_cast<void*>(fn_kernel));
     symbols.RegisterVar(kernel_fn_name + "_ptr_",
                         reinterpret_cast<void*>(fn_kernel));
@@ -365,8 +388,8 @@ void Compiler::RegisterHipModuleSymbol() {
   PADDLE_ENFORCE_EQ(
       !hsaco.empty(),
       true,
-      ::common::errors::Fatal("Compile hsaco failed from source code:\n%s",
-                              source_code));
+      phi::errors::Fatal("Compile hsaco failed from source code:\n%s",
+                         source_code));
   using runtime::hip::HIPModule;
   hip_module_.reset(new HIPModule(hsaco));
   // get device id
@@ -378,7 +401,7 @@ void Compiler::RegisterHipModuleSymbol() {
     auto fn_kernel = hip_module_->GetFunction(device_id, kernel_fn_name);
     PADDLE_ENFORCE_NOT_NULL(
         fn_kernel,
-        ::common::errors::Fatal("HIP GetFunction Error: get valid kernel."));
+        phi::errors::Fatal("HIP GetFunction Error: get valid kernel."));
     fn_ptr_.push_back(reinterpret_cast<void*>(fn_kernel));
     symbols.RegisterVar(kernel_fn_name + "_ptr_",
                         reinterpret_cast<void*>(fn_kernel));
@@ -387,6 +410,12 @@ void Compiler::RegisterHipModuleSymbol() {
 #else
   CINN_NOT_IMPLEMENTED
 #endif
+}
+
+
+void Compiler::RegisterSyclModuleSymbol(){
+    PADDLE_THROW(phi::errors::Unimplemented(
+            "CINN todo: new hardware HygonDCUArchSYCL"));
 }
 
 void Compiler::CompileCudaModule(const Module& module,
@@ -413,7 +442,7 @@ void Compiler::CompileCudaModule(const Module& module,
 
   PADDLE_ENFORCE_EQ(!source_code.empty(),
                     true,
-                    ::common::errors::InvalidArgument(
+                    phi::errors::InvalidArgument(
                         "Compile CUDA C code failed from device module"));
   VLOG(3) << "[CUDA] C:\n" << source_code;
   SourceCodePrint::GetInstance()->write(source_code);
@@ -423,7 +452,7 @@ void Compiler::CompileCudaModule(const Module& module,
     std::string kernel_fn_name = fn->name;
     device_fn_name_.emplace_back(kernel_fn_name);
   }
-  engine_->Link<CodeGenGpuHost>(host_module);
+  engine_->Link<CodeGenCudaHost>(host_module);
 
 #else
   CINN_NOT_IMPLEMENTED
@@ -451,8 +480,8 @@ void Compiler::CompileHipModule(const Module& module, const std::string& code) {
   PADDLE_ENFORCE_EQ(
       !source_code.empty(),
       true,
-      ::common::errors::Fatal("Compile HIP code failed from device module:\n%s",
-                              device_module));
+      phi::errors::Fatal("Compile HIP code failed from device module:\n%s",
+                         device_module));
   VLOG(3) << "[HIP]:\n" << source_code;
   SourceCodePrint::GetInstance()->write(source_code);
   device_fn_code_ += source_code;
@@ -460,7 +489,43 @@ void Compiler::CompileHipModule(const Module& module, const std::string& code) {
     std::string kernel_fn_name = fn->name;
     device_fn_name_.emplace_back(kernel_fn_name);
   }
-  engine_->Link<CodeGenGpuHost>(host_module);
+  //engine_->Link<CodeGenCUDA_Host>(host_module);
+#else
+  CINN_NOT_IMPLEMENTED
+#endif
+}
+
+void Compiler::CompileSyclModule(const Module& module, const std::string& code){
+#ifdef CINN_WITH_SYCL
+  auto _host_module_device_module_ =
+      SplitDeviceAndHostModule(module);  // NOLINT
+  auto& host_module = std::get<0>(_host_module_device_module_);
+  auto& device_module = std::get<1>(_host_module_device_module_);
+  VLOG(3) << "[SYCL] host module:\n" << host_module;
+  VLOG(3) << "[SYCL] device module:\n" << device_module;
+  std::string source_code;
+  if (!FLAGS_cinn_debug_custom_code_path.empty()) {
+    std::string file_path = FLAGS_cinn_debug_custom_code_path;
+    source_code = GetFileContent(file_path);
+  } else if (code.empty()) {
+    Sycl::CodeGenSyclDevice codegen(target_);
+    source_code = codegen.Compile(device_module);
+  } else {
+    source_code = code;
+  }
+  PADDLE_ENFORCE_EQ(
+      !source_code.empty(),
+      true,
+      phi::errors::Fatal("Compile SYCL code failed from device module:\n%s",
+                         device_module));
+  VLOG(3) << "[SYCL]:\n" << source_code;
+  SourceCodePrint::GetInstance()->write(source_code);
+  device_fn_code_ += source_code;
+  for (auto& fn : device_module.functions()) {
+    std::string kernel_fn_name = fn->name;
+    device_fn_name_.emplace_back(kernel_fn_name);
+  }
+  //engine_->Link<CodeGenCUDA_Host>(host_module);
 #else
   CINN_NOT_IMPLEMENTED
 #endif
@@ -476,7 +541,7 @@ void Compiler::ExportObject(const std::string& path) {
 
 void* Compiler::Lookup(absl::string_view fn_name) {
   PADDLE_ENFORCE_NOT_NULL(
-      engine_, ::common::errors::InvalidArgument("Sorry, engine_ is nullptr"));
+      engine_, phi::errors::InvalidArgument("Sorry, engine_ is nullptr"));
   if (engine_->Lookup(fn_name) != nullptr) {
     return engine_->Lookup(fn_name);
   }

@@ -136,10 +136,14 @@ class Compiler final {
 
   void RegisterHipModuleSymbol();
 
+  void RegisterSyclModuleSymbol();
+
   void CompileCudaModule(const ir::Module& module,
                          const std::string& code = "");
 
   void CompileHipModule(const ir::Module& module, const std::string& code = "");
+
+  void CompileSyclModule(const ir::Module& module, const std::string& code = "");
 
   void CompileX86Module(const ir::Module& module);
 

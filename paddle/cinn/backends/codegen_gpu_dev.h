@@ -112,7 +112,7 @@ class CodeGenGpuDev : public CodeGenC {
    */
   virtual void PrintFunctionDeclaration(const ir::_LoweredFunc_* op);
 
- private:
+ protected:
   Target target_;
   bool use_rtc_{false};
   // names of vectorized tensors from `Let` statements where dtypes of the

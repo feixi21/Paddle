@@ -374,6 +374,12 @@ std::vector<ir::LoweredFunc> OpLowererImpl::PostProcess(
             optim::EliminateCommonGlobalMemoryRead(&(func_body));
             optim::OptimizeExprGPU(&(func_body));
 #endif
+          },
+          [&](common::HygonDCUArchSYCL) {
+#ifdef CINN_WITH_SYCL
+            optim::EliminateCommonGlobalMemoryRead(&(func_body));
+            optim::OptimizeExprGPU(&(func_body));
+#endif
           });
     }
 
@@ -533,6 +539,14 @@ std::vector<ir::LoweredFunc> OpLowererImpl::DoOpLower(
           expr.as_tensor_ref()->WithBuffer();
         },
         [&](common::HygonDCUArchHIP) {
+          if (!expr.as_tensor_ref()->buffer.defined()) {
+            op_func_arg_tensors->push_back(expr.as_tensor_ref());
+            expr.as_tensor_ref()->WithBuffer();
+          } else {
+            op_func_arg_tensors->push_back(expr.as_tensor_ref());
+          }
+        },
+        [&](common::HygonDCUArchSYCL) {
           if (!expr.as_tensor_ref()->buffer.defined()) {
             op_func_arg_tensors->push_back(expr.as_tensor_ref());
             expr.as_tensor_ref()->WithBuffer();

@@ -1115,6 +1115,7 @@ bool CasSimplifyMutator::SimplifySpecificSumMod(Expr* result, Expr a, Expr b) {
   return cinn::common::DefaultDeviceTarget().arch.Match(
       [&](common::NVGPUArch) { return false; },
       [&](common::HygonDCUArchHIP) { return false; },
+      [&](common::HygonDCUArchSYCL) { return false; },
       [&](std::variant<common::UnknownArch, common::X86Arch, common::ARMArch>) {
         int const_value = 0;
         Expr lower_bound;

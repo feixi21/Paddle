@@ -222,7 +222,11 @@ std::shared_ptr<framework::OpStrategy> StrategyForGatherNd(
           },
           [&](common::HygonDCUArchHIP) {
             pe::IRGpuScheduleInjective(ir_sch, output_shapes.front(), target);
-          });
+          },
+          [&](common::HygonDCUArchSYCL) {
+            pe::IRGpuScheduleInjective(ir_sch, output_shapes.front(), target);
+          }
+          );
     }
     std::vector<cinn::common::CINNValue> res{
         cinn::common::CINNValue(ir_sch.GetModule().GetExprs().at(0))};
