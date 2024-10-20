@@ -214,6 +214,11 @@ void DyScheduleImpl::Bind(const Expr& loop, const std::string& thread_axis) {
             HipBackendAPI->get_max_block_dims();
         bindNvHygon(kMaxBlockDims, kMaxGridDims);
 #endif
+      },
+      [&](common::HygonDCUArchHIP) {
+#ifdef CINN_WITH_SYCL
+
+#endif
       });
 }
 }  // namespace ir

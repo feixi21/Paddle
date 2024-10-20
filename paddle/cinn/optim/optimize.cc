@@ -94,6 +94,10 @@ Expr Optimize(Expr e,
         CudaSyncThreadsDropIfThenElse(&copied);
     // CudaTransBufferWithDynamicShape(&copied);
 #endif
+      },
+      [&](common::HygonDCUArchSYCL) {
+#ifdef CINN_WITH_SYCL
+#endif
       });
 
   SimplifyBlocks(&copied);

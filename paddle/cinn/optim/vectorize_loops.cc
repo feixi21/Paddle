@@ -809,6 +809,15 @@ struct VectorizeLoops_ : public IRMutator<Expr *> {
                          "factor";
             }
           },
+          [&](common::HygonDCUArchSYCL) {
+            if (!forloop->extent.As<IntImm>() ||
+                forloop->extent.as_int32() % forloop->vectorize_info().factor !=
+                    0) {
+              vectorizable_ = false;
+              VLOG(5) << "DCU vectorize only support extent is a multiple of "
+                         "factor";
+            }
+          },
           [&](std::variant<common::UnknownArch,
                            common::X86Arch,
                            common::ARMArch>) {});
@@ -887,7 +896,8 @@ struct VectorizeLoops_ : public IRMutator<Expr *> {
                               new_forloop->loop_var, extent, var_intervals)
                               .Visit(&new_forloop->body);
                         },
-                        [&](common::HygonDCUArchHIP) { setNvHygon(); });
+                        [&](common::HygonDCUArchHIP) { setNvHygon(); },
+                        [&](common::HygonDCUArchSYCL) { setNvHygon(); });
 
       VLOG(2) << "after vectorize body:\n" << node->body;
 
