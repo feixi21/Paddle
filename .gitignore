@@ -45,7 +45,7 @@ build_doc/
 *.tmp
 *.pyc
 *.log
-
+*.tar.*
 .vscode
 .idea
 .project
