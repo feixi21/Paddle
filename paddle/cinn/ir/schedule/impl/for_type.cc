@@ -215,9 +215,9 @@ void DyScheduleImpl::Bind(const Expr& loop, const std::string& thread_axis) {
         bindNvHygon(kMaxBlockDims, kMaxGridDims);
 #endif
       },
-      [&](common::HygonDCUArchHIP) {
+      [&](common::HygonDCUArchSYCL) {
 #ifdef CINN_WITH_SYCL
-
+      
 #endif
       });
 }

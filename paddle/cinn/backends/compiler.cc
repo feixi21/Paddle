@@ -476,7 +476,7 @@ void Compiler::CompileHipModule(const Module& module, const std::string& code) {
 #endif
 }
 
-void Compiler::CompileHipModule(const Module& module, const std::string& code) {
+void Compiler::CompileSyclModule(const Module& module, const std::string& code) {
   
 }
 
